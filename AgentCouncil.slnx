@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/AgentCouncil.AppHost/AgentCouncil.AppHost.csproj" />
+    <Project Path="src/AgentCouncil.ServiceDefaults/AgentCouncil.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/AgentCouncil.AppHost.Tests/AgentCouncil.AppHost.Tests.csproj" />
+  </Folder>
+</Solution>
