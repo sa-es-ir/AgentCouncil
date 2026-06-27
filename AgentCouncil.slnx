@@ -4,7 +4,9 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/AgentCouncil.AppHost/AgentCouncil.AppHost.csproj" />
+    <Project Path="src/AgentCouncil.Agents/AgentCouncil.Agents.csproj" />
     <Project Path="src/AgentCouncil.ServiceDefaults/AgentCouncil.ServiceDefaults.csproj" />
+    <Project Path="src/AgentCouncil.Web/AgentCouncil.Web.csproj" />
   </Folder>
   <Folder Name="/test/">
     <Project Path="test/AgentCouncil.AppHost.Tests/AgentCouncil.AppHost.Tests.csproj" />

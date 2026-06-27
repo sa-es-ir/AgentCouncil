@@ -1,0 +1,174 @@
+@page "/"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject CouncilClient Client
+
+<PageTitle>Agent Council</PageTitle>
+
+<div class="council">
+    <header class="council-header">
+        <h1>The Agent Council</h1>
+        <p>Drop a topic and let the Moderator, Optimist, Skeptic and Pragmatist hash it out.</p>
+    </header>
+
+    @if (!_started)
+    {
+        <div class="topic-box">
+            <input @bind="_topic" @bind:event="oninput" @onkeydown="OnTopicKeyDown"
+                   placeholder="e.g. Should we adopt a 4-day work week?" class="topic-input" />
+            <button class="btn" disabled="@(string.IsNullOrWhiteSpace(_topic) || !Client.IsConnected)" @onclick="StartAsync">
+                Convene the council
+            </button>
+        </div>
+        @if (!Client.IsConnected)
+        {
+            <p class="hint">Connecting to the council…</p>
+        }
+    }
+    else
+    {
+        <div class="transcript">
+            @foreach (var entry in _transcript)
+            {
+                <div class="bubble @AgentClass(entry.Agent)">
+                    <div class="avatar">@Initial(entry.Agent)</div>
+                    <div class="bubble-body">
+                        <div class="speaker">@entry.Agent</div>
+                        <div class="text">@entry.Text</div>
+                    </div>
+                </div>
+            }
+            @if (_busy)
+            {
+                <div class="thinking">The council is deliberating…</div>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="error">@_error</div>
+        }
+
+        <div class="reply-box">
+            <input @bind="_reply" @bind:event="oninput" @onkeydown="OnReplyKeyDown"
+                   placeholder="@(_awaitingUser ? "The council awaits your input…" : "Waiting for the council…")"
+                   class="reply-input" disabled="@(!_awaitingUser)" />
+            <button class="btn" disabled="@(!_awaitingUser || string.IsNullOrWhiteSpace(_reply))" @onclick="ReplyAsync">
+                Send
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private string _topic = string.Empty;
+    private string _reply = string.Empty;
+    private bool _started;
+    private bool _busy;
+    private bool _awaitingUser;
+    private string? _error;
+    private readonly List<TranscriptEntry> _transcript = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Client.AgentDelta += OnAgentDelta;
+        Client.AwaitUserInput += OnAwaitUserInput;
+        Client.CouncilError += OnCouncilError;
+        await Client.ConnectAsync();
+        StateHasChanged();
+    }
+
+    private async Task StartAsync()
+    {
+        _started = true;
+        _busy = true;
+        _awaitingUser = false;
+        _error = null;
+        _transcript.Clear();
+        await Client.StartCouncilAsync(_topic);
+    }
+
+    private async Task ReplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_reply))
+        {
+            return;
+        }
+
+        _transcript.Add(new TranscriptEntry { Agent = "You", Text = _reply });
+        _busy = true;
+        _awaitingUser = false;
+        _error = null;
+        var text = _reply;
+        _reply = string.Empty;
+        await Client.SendUserInputAsync(text);
+    }
+
+    private async Task OnTopicKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_topic) && Client.IsConnected)
+        {
+            await StartAsync();
+        }
+    }
+
+    private async Task OnReplyKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _awaitingUser && !string.IsNullOrWhiteSpace(_reply))
+        {
+            await ReplyAsync();
+        }
+    }
+
+    private void OnAgentDelta(string agent, string text)
+    {
+        _busy = true;
+        _awaitingUser = false;
+        var last = _transcript.Count > 0 ? _transcript[^1] : null;
+        if (last is not null && last.Agent == agent)
+        {
+            last.Text += text;
+        }
+        else
+        {
+            _transcript.Add(new TranscriptEntry { Agent = agent, Text = text });
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnAwaitUserInput()
+    {
+        _busy = false;
+        _awaitingUser = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnCouncilError(string message)
+    {
+        _error = message;
+        _busy = false;
+        _awaitingUser = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private static string AgentClass(string agent) => agent switch
+    {
+        "Moderator" => "moderator",
+        "Optimist" => "optimist",
+        "Skeptic" => "skeptic",
+        "Pragmatist" => "pragmatist",
+        "You" => "you",
+        _ => "other",
+    };
+
+    private static string Initial(string agent) => string.IsNullOrEmpty(agent) ? "?" : agent[..1];
+
+    public async ValueTask DisposeAsync()
+    {
+        Client.AgentDelta -= OnAgentDelta;
+        Client.AwaitUserInput -= OnAwaitUserInput;
+        Client.CouncilError -= OnCouncilError;
+        await Client.DisposeAsync();
+    }
+}

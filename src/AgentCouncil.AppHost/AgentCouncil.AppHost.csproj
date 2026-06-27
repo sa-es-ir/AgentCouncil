@@ -12,4 +12,9 @@
     <PackageReference Include="MessagePack" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\AgentCouncil.Agents\AgentCouncil.Agents.csproj" />
+    <ProjectReference Include="..\AgentCouncil.Web\AgentCouncil.Web.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -1,0 +1,117 @@
+:root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --text: #e7e9ee;
+    --muted: #9aa3b2;
+    --accent: #6c8cff;
+    --moderator: #6c8cff;
+    --optimist: #3fbf7f;
+    --skeptic: #e8694a;
+    --pragmatist: #d9a13b;
+    --you: #8b93a7;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+.page { min-height: 100vh; }
+
+.council {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+}
+
+.council-header h1 {
+    margin: 0 0 .25rem;
+    font-size: 1.9rem;
+}
+
+.council-header p { color: var(--muted); margin: 0 0 1.5rem; }
+
+.topic-box, .reply-box {
+    display: flex;
+    gap: .5rem;
+    margin: 1rem 0;
+}
+
+.topic-input, .reply-input {
+    flex: 1;
+    padding: .8rem 1rem;
+    border-radius: .6rem;
+    border: 1px solid #2a2f3a;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.reply-input:disabled { opacity: .5; }
+
+.btn {
+    padding: .8rem 1.2rem;
+    border: none;
+    border-radius: .6rem;
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.hint, .thinking { color: var(--muted); font-style: italic; }
+
+.transcript {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.bubble {
+    display: flex;
+    gap: .75rem;
+    background: var(--panel);
+    border-left: 4px solid var(--muted);
+    border-radius: .6rem;
+    padding: .85rem 1rem;
+}
+
+.bubble.moderator { border-left-color: var(--moderator); }
+.bubble.optimist { border-left-color: var(--optimist); }
+.bubble.skeptic { border-left-color: var(--skeptic); }
+.bubble.pragmatist { border-left-color: var(--pragmatist); }
+.bubble.you { border-left-color: var(--you); background: #12151b; }
+
+.avatar {
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 2rem;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    background: #222732;
+}
+
+.moderator .avatar { color: var(--moderator); }
+.optimist .avatar { color: var(--optimist); }
+.skeptic .avatar { color: var(--skeptic); }
+.pragmatist .avatar { color: var(--pragmatist); }
+
+.speaker { font-weight: 700; margin-bottom: .2rem; }
+.text { white-space: pre-wrap; line-height: 1.5; }
+
+.error {
+    background: #3a1d1d;
+    color: #ffb4a8;
+    border-radius: .6rem;
+    padding: .75rem 1rem;
+    margin: 1rem 0;
+}
