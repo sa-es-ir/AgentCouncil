@@ -1,5 +1,6 @@
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.AI;
 
 namespace AgentCouncil.Agents.Hubs;
 
@@ -35,7 +36,11 @@ public sealed class CouncilHub(CouncilSessionManager sessions, ILogger<CouncilHu
     private async Task RunTurnAsync(StreamingRun run, string userInput)
     {
         CancellationToken ct = Context.ConnectionAborted;
-        await run.TrySendMessageAsync(userInput);
+
+        // The handoff executors buffer incoming messages; they only take their turn once a
+        // TurnToken arrives. Without it the run idles and the stream ends with no events.
+        await run.TrySendMessageAsync(new ChatMessage(ChatRole.User, userInput));
+        await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
 
         string? speakingAgent = null;
         try
