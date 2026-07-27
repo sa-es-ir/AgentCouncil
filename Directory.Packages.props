@@ -13,8 +13,9 @@
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.7.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
-    <!-- SignalR client for the Blazor front-end -->
+    <!-- SignalR client + markdown rendering for the Blazor front-end -->
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
+    <PackageVersion Include="Markdig" Version="0.41.3" />
     <PackageVersion Include="MessagePack" Version="3.1.7" />
     <PackageVersion Include="Shouldly" Version="4.2.1" />
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.6" />

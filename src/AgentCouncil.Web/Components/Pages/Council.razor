@@ -2,17 +2,49 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @inject CouncilClient Client
+@using Markdig
 
 <PageTitle>Agent Council</PageTitle>
 
 <div class="council">
     <header class="council-header">
+        <div class="crest">⚖️</div>
         <h1>The Agent Council</h1>
-        <p>Drop a topic and let the Moderator, Optimist, Skeptic and Pragmatist hash it out.</p>
+        <p>Drop a topic and let four minds hash it out.</p>
     </header>
 
     @if (!_started)
     {
+        <div class="roster">
+            @foreach (var m in Members.Values.Where(m => m.Name != "You"))
+            {
+                <div class="roster-card @m.Css">
+                    <span class="roster-icon">@m.Icon</span>
+                    <span class="roster-name">@m.Name</span>
+                    <span class="roster-role">@m.Role</span>
+                </div>
+            }
+        </div>
+
+        <div class="mode-row">
+            <button type="button" class="mode-card @(!_groupChat ? "selected" : "")" @onclick="() => _groupChat = false">
+                <span class="mode-name">🤝 Handoff</span>
+                <span class="mode-desc">The Moderator decides who speaks next and when to ask you.</span>
+            </button>
+            <button type="button" class="mode-card @(_groupChat ? "selected" : "")" @onclick="() => _groupChat = true">
+                <span class="mode-name">🔄 Group chat</span>
+                <span class="mode-desc">Round-robin: every agent gets the floor a fixed number of times.</span>
+            </button>
+        </div>
+
+        @if (_groupChat)
+        {
+            <label class="rounds-row">
+                Turns per agent
+                <input type="number" min="1" max="10" @bind="_rounds" class="rounds-input" />
+            </label>
+        }
+
         <div class="topic-box">
             <input @bind="_topic" @bind:event="oninput" @onkeydown="OnTopicKeyDown"
                    placeholder="e.g. Should we adopt a 4-day work week?" class="topic-input" />
@@ -27,26 +59,59 @@
     }
     else
     {
+        <div class="session">
+        <aside class="stage-rail">
+            <div class="stage">
+                <div class="stage-track"></div>
+                @foreach (var m in Members.Values)
+                {
+                    <div class="seat @m.Css @(m.Name == _activeAgent ? "active" : "")">
+                        <div class="seat-avatar">@m.Icon</div>
+                        <div class="seat-name">@m.Name</div>
+                    </div>
+                }
+                <div class="orb @(_activeAgent is null ? "" : "visible")" style="@OrbStyle()"></div>
+            </div>
+            <p class="stage-caption">
+                <span class="mode-badge">@(_groupChat ? $"🔄 Group chat · {_rounds} turn(s) each" : "🤝 Handoff")</span>
+                @if (_activeAgent is not null and not "You")
+                {
+                    <span class="floor-note">@Meta(_activeAgent).Icon @_activeAgent has the floor — @Meta(_activeAgent).Role</span>
+                }
+                else if (_awaitingUser)
+                {
+                    <span class="floor-note">🎙️ The floor is yours</span>
+                }
+            </p>
+        </aside>
+
+        <div class="session-main">
         <div class="transcript">
-            @foreach (var entry in _transcript)
+            @for (var i = 0; i < _transcript.Count; i++)
             {
-                <div class="bubble @AgentClass(entry.Agent)">
-                    <div class="avatar">@Initial(entry.Agent)</div>
-                    <div class="bubble-body">
-                        <div class="speaker">@entry.Agent</div>
-                        <div class="text">@entry.Text</div>
+                var entry = _transcript[i];
+                var m = Meta(entry.Agent);
+                var streaming = _busy && i == _transcript.Count - 1 && entry.Agent != "You";
+                <div class="msg @m.Css @(entry.Agent == "You" ? "from-you" : "") @(streaming ? "streaming" : "")">
+                    <div class="avatar" title="@m.Role">@m.Icon</div>
+                    <div class="msg-body">
+                        <div class="msg-header">
+                            <span class="speaker">@entry.Agent</span>
+                            <span class="role-chip">@m.Role</span>
+                        </div>
+                        <div class="text">@Render(entry.Text)</div>
                     </div>
                 </div>
             }
-            @if (_busy)
+            @if (_busy && (_transcript.Count == 0 || _transcript[^1].Agent == "You"))
             {
-                <div class="thinking">The council is deliberating…</div>
+                <div class="thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span> The council is deliberating…</div>
             }
         </div>
 
         @if (_error is not null)
         {
-            <div class="error">@_error</div>
+            <div class="error">⚠️ @_error</div>
         }
 
         <div class="reply-box">
@@ -54,18 +119,45 @@
                    placeholder="@(_awaitingUser ? "The council awaits your input…" : "Waiting for the council…")"
                    class="reply-input" disabled="@(!_awaitingUser)" />
             <button class="btn" disabled="@(!_awaitingUser || string.IsNullOrWhiteSpace(_reply))" @onclick="ReplyAsync">
-                Send
+                Send ➤
             </button>
+        </div>
+        </div>
         </div>
     }
 </div>
 
 @code {
+    private sealed record Member(string Name, string Icon, string Role, string Css);
+
+    // Order matters: seat positions on the stage (and the orb math) follow this order.
+    private static readonly Dictionary<string, Member> Members = new()
+    {
+        ["Moderator"] = new("Moderator", "⚖️", "chairs the floor", "moderator"),
+        ["Optimist"] = new("Optimist", "☀️", "argues the upside", "optimist"),
+        ["Skeptic"] = new("Skeptic", "🔍", "hunts the risk", "skeptic"),
+        ["Pragmatist"] = new("Pragmatist", "🧭", "charts the path", "pragmatist"),
+        ["You"] = new("You", "🎙️", "sets the agenda", "you"),
+    };
+
+    private static readonly Member Unknown = new("Council", "🏛️", "member", "other");
+
+    // HTML is disabled so raw markup coming back from the model is rendered as text, not injected.
+    private static readonly MarkdownPipeline Markdown =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+
+    private static Member Meta(string agent) => Members.GetValueOrDefault(agent, Unknown);
+
+    private static MarkupString Render(string text) => (MarkupString)Markdig.Markdown.ToHtml(text, Markdown);
+
     private string _topic = string.Empty;
     private string _reply = string.Empty;
     private bool _started;
     private bool _busy;
     private bool _awaitingUser;
+    private bool _groupChat;
+    private int _rounds = 2;
+    private string? _activeAgent;
     private string? _error;
     private readonly List<TranscriptEntry> _transcript = new();
 
@@ -78,14 +170,24 @@
         StateHasChanged();
     }
 
+    private string OrbStyle()
+    {
+        var index = _activeAgent is null ? 0 : Members.Keys.ToList().IndexOf(_activeAgent);
+        if (index < 0) { index = 0; }
+        // Seat centers sit at 10 / 30 / 50 / 70 / 90 % of the vertical rail.
+        return $"top:{index * 20 + 10}%; --orb-color:var(--{Meta(_activeAgent ?? "Moderator").Css})";
+    }
+
     private async Task StartAsync()
     {
         _started = true;
         _busy = true;
         _awaitingUser = false;
+        _activeAgent = null;
         _error = null;
         _transcript.Clear();
-        await Client.StartCouncilAsync(_topic);
+        _transcript.Add(new TranscriptEntry { Agent = "You", Text = _topic });
+        await Client.StartCouncilAsync(_topic, _groupChat ? "groupchat" : "handoff", _rounds);
     }
 
     private async Task ReplyAsync()
@@ -98,6 +200,7 @@
         _transcript.Add(new TranscriptEntry { Agent = "You", Text = _reply });
         _busy = true;
         _awaitingUser = false;
+        _activeAgent = null;
         _error = null;
         var text = _reply;
         _reply = string.Empty;
@@ -124,6 +227,7 @@
     {
         _busy = true;
         _awaitingUser = false;
+        _activeAgent = agent;
         var last = _transcript.Count > 0 ? _transcript[^1] : null;
         if (last is not null && last.Agent == agent)
         {
@@ -141,6 +245,7 @@
     {
         _busy = false;
         _awaitingUser = true;
+        _activeAgent = "You";
         InvokeAsync(StateHasChanged);
     }
 
@@ -149,20 +254,9 @@
         _error = message;
         _busy = false;
         _awaitingUser = true;
+        _activeAgent = "You";
         InvokeAsync(StateHasChanged);
     }
-
-    private static string AgentClass(string agent) => agent switch
-    {
-        "Moderator" => "moderator",
-        "Optimist" => "optimist",
-        "Skeptic" => "skeptic",
-        "Pragmatist" => "pragmatist",
-        "You" => "you",
-        _ => "other",
-    };
-
-    private static string Initial(string agent) => string.IsNullOrEmpty(agent) ? "?" : agent[..1];
 
     public async ValueTask DisposeAsync()
     {

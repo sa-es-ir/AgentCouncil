@@ -1,6 +1,6 @@
 # AgentCouncil
 
-A multi-agent "council" app built on the **Microsoft Agent Framework** (.NET, GA 1.11) and **.NET Aspire**. A user drops a topic; a council of four agents (**Moderator + Optimist + Skeptic + Pragmatist**) debate it via **handoff orchestration**, then return the floor to the user. Backed by **Azure OpenAI** (API-key auth). Visualized through the Agent Framework **DevUI** debugger and a custom **Blazor** chat front-end.
+A multi-agent "council" app built on the **Microsoft Agent Framework** (.NET, GA 1.11) and **.NET Aspire**. A user drops a topic; a council of four agents (**Moderator + Optimist + Skeptic + Pragmatist**) debate it via a per-session choice of **handoff** or **group chat (round-robin)** orchestration, then return the floor to the user. Backed by **Azure OpenAI** (API-key auth). Visualized through the Agent Framework **DevUI** debugger and a custom **Blazor** chat front-end.
 
 ## Architecture
 
@@ -15,15 +15,16 @@ test/AgentCouncil.AppHost.Tests   Aspire integration test
 ### AgentCouncil.Agents
 - **`AzureOpenAIChatClient.cs`** — `AddCouncilChatClient()` parses the single `openai` connection string (`Endpoint=...;Key=...;Deployment=...`) and registers a shared `IChatClient` wrapped with OpenTelemetry (source `AgentCouncil.Agents`).
 - **`Agents/CouncilAgents.cs`** — singleton holding the four `ChatClientAgent`s with their persona instructions. Reused by both the workflow and DevUI.
-- **`Workflow/CouncilWorkflow.cs`** — builds the handoff workflow: `AgentWorkflowBuilder.CreateHandoffBuilderWith(moderator).WithHandoffs(moderator, personas).WithHandoffs(personas, moderator).EnableReturnToPrevious().Build()`. Built once; each session opens its own streaming run.
-- **`Hubs/CouncilHub.cs`** + **`CouncilSessionManager.cs`** — SignalR hub at `/councilhub`. One `StreamingRun` per connection holds the full conversation across turns.
-  - `StartCouncil(topic)` / `SendUserInput(text)` → `run.TrySendMessageAsync(text)` then iterate `run.WatchStreamAsync()`.
+- **`Workflow/CouncilWorkflow.cs`** — builds both workflows. `Handoff` (built once): `AgentWorkflowBuilder.CreateHandoffBuilderWith(moderator).WithHandoffs(moderator, personas).WithHandoffs(personas, moderator).EnableReturnToPrevious().Build()`. `BuildGroupChat(roundsPerAgent)` (built per session): `CreateGroupChatBuilderWith(a => new RoundRobinGroupChatManager(a) { MaximumIterationCount = rounds * 4 }).AddParticipants(all).Build()` — every agent (Moderator first) speaks exactly `roundsPerAgent` times per user turn.
+- **`Hubs/CouncilHub.cs`** + **`CouncilSessionManager.cs`** — SignalR hub at `/councilhub`. One `CouncilSession` per connection: handoff mode holds a persistent `StreamingRun` across turns; group chat mode holds a `List<ChatMessage>` history and opens a fresh run per user turn (the round-robin workflow terminates after its round budget and emits the full conversation via `WorkflowOutputEvent`, which reseeds the history).
+  - `StartCouncil(topic, mode, roundsPerAgent)` (`mode` = `"handoff"` | `"groupchat"`) / `SendUserInput(text)`.
   - Client-bound: `AgentDelta(agent, text)`, `AwaitUserInput()`, `CouncilError(message)`.
+  - Agent instructions cap every turn at 2 sentences (demo-friendly pacing).
 - **`Program.cs`** — registers everything; DevUI (`AddDevUI` + `MapOpenAIResponses`/`MapOpenAIConversations`/`MapDevUI`) is **Development-only**.
 
 ### AgentCouncil.Web
 - **`Services/CouncilClient.cs`** — per-circuit `HubConnection` to the `agents` service. Resolves the hub URL from Aspire service-discovery config (`services:agents:https:0`, falling back to `http`).
-- **`Components/Pages/Council.razor`** — topic box → transcript (one colored bubble per speaking agent, text accumulates on `AgentDelta`) → reply box enabled on `AwaitUserInput`.
+- **`Components/Pages/Council.razor`** — roster cards + mode picker (handoff / group chat + turns-per-agent) → topic box → animated **council stage** (five seats with emoji emblems; a glowing "floor token" slides to whoever is speaking, derived client-side from `AgentDelta` speaker changes) → transcript: each message shows the agent's emoji avatar, colored name, and role chip; council messages sit left, yours right; bodies render **markdown via Markdig** (`DisableHtml` — model output is never injected as raw HTML); streaming caret on the live message → reply box enabled on `AwaitUserInput`. Agent identity (icon/role/color) lives in the `Members` dictionary in this file.
 
 ## How to run
 

@@ -46,8 +46,10 @@ public sealed class CouncilClient(IConfiguration configuration) : IAsyncDisposab
         await _connection.StartAsync(cancellationToken);
     }
 
-    public Task StartCouncilAsync(string topic) =>
-        _connection?.InvokeAsync("StartCouncil", topic) ?? Task.CompletedTask;
+    /// <param name="mode">"handoff" or "groupchat".</param>
+    /// <param name="roundsPerAgent">Group chat only: how many times each agent speaks per user turn.</param>
+    public Task StartCouncilAsync(string topic, string mode, int roundsPerAgent) =>
+        _connection?.InvokeAsync("StartCouncil", topic, mode, roundsPerAgent) ?? Task.CompletedTask;
 
     public Task SendUserInputAsync(string text) =>
         _connection?.InvokeAsync("SendUserInput", text) ?? Task.CompletedTask;
