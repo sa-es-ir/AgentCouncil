@@ -5,13 +5,13 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Microsoft Agent Framework (core GA; Hosting + DevUI are prerelease) -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.11.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.11.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.11.1-preview.260625.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.11.1-preview.260625.1" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.19.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.19.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.19.0-preview.260822.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.19.0-preview.260822.1" />
     <!-- LLM client stack -->
-    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.7.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.9.0" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
     <!-- SignalR client + markdown rendering for the Blazor front-end -->
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
