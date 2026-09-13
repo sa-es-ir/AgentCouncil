@@ -94,6 +94,39 @@ html, body {
 .roster-name { font-weight: 700; color: var(--seat-color); }
 .roster-role { font-size: .78rem; color: var(--muted); font-style: italic; }
 
+/* Roster cards are invite toggles. */
+button.roster-card {
+    position: relative;
+    font: inherit;
+    color: var(--text);
+    cursor: pointer;
+    transition: opacity .2s, filter .2s, box-shadow .2s;
+}
+
+.roster-card.selected {
+    box-shadow: 0 0 0 1px var(--seat-color), 0 0 16px color-mix(in srgb, var(--seat-color) 22%, transparent);
+}
+
+.roster-card.off { opacity: .45; filter: grayscale(.7); }
+.roster-card.off:hover { opacity: .75; }
+.roster-card:disabled { cursor: default; }
+
+.roster-card:focus-visible, .mode-card:focus-visible, .file-list button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.roster-check {
+    position: absolute;
+    top: .4rem;
+    right: .6rem;
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--seat-color);
+}
+
+.roster-hint { margin: -.5rem 0 1rem; font-size: .85rem; }
+
 /* ---- Orchestration mode picker ---- */
 
 .mode-row {
@@ -259,6 +292,59 @@ html, body {
 
 .floor-note { font-style: italic; }
 
+.chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+
+.harness-mode.execute { color: var(--pragmatist); border-color: color-mix(in srgb, var(--pragmatist) 45%, #2a2f3a); }
+.researching { color: var(--moderator); border-color: color-mix(in srgb, var(--moderator) 45%, #2a2f3a); }
+
+/* ---- Rail panels: the Pragmatist's todos + the workspace ---- */
+
+.rail-panel {
+    margin-top: .9rem;
+    padding: .75rem .9rem;
+    border-radius: .8rem;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+}
+
+.rail-panel h2 {
+    margin: 0 0 .5rem;
+    font-size: .76rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.rail-panel .hint { margin: 0; font-size: .82rem; }
+
+.todo-list, .file-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    font-size: .86rem;
+}
+
+.todo-list li { overflow-wrap: anywhere; }
+.todo-list li.done { color: var(--muted); text-decoration: line-through; }
+
+.file-list button {
+    width: 100%;
+    text-align: left;
+    padding: .3rem .45rem;
+    border: 1px solid transparent;
+    border-radius: .4rem;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.file-list button:hover { border-color: var(--panel-edge); background: #1d212b; }
+
 /* ---- Topic / reply ---- */
 
 .topic-box, .reply-box {
@@ -290,6 +376,58 @@ html, body {
 }
 
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.secondary { background: #2c3345; }
+.btn.danger { background: #8f3b2d; }
+
+/* ---- Modals: approval gate + file preview ---- */
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(5, 6, 9, .72);
+}
+
+.modal {
+    width: min(560px, 100%);
+    max-height: 85vh;
+    overflow: auto;
+    padding: 1.1rem 1.25rem;
+    border-radius: .9rem;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+    animation: rise .25s ease both;
+}
+
+.modal.wide { width: min(760px, 100%); }
+
+.modal h2 { margin: 0 0 .75rem; font-size: 1.05rem; overflow-wrap: anywhere; }
+
+.modal pre {
+    margin: 0;
+    padding: .7rem .9rem;
+    max-height: 45vh;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: .85rem;
+    background: #0c0e12;
+    border: 1px solid var(--panel-edge);
+    border-radius: .5rem;
+}
+
+.modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .5rem;
+    margin-top: 1rem;
+}
 
 .hint { color: var(--muted); font-style: italic; }
 
@@ -456,6 +594,8 @@ html, body {
 @media (max-width: 760px) {
     .mode-row { flex-direction: column; }
     .roster { grid-template-columns: repeat(2, 1fr); }
+    .reply-box { flex-wrap: wrap; }
+    .reply-input { flex-basis: 100%; }
     .msg { max-width: 100%; }
 
     /* Single column: rail sits above the transcript, seats fold into a compact row. */
@@ -471,7 +611,7 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
     .orb { transition: opacity .3s; }
     .seat.active .seat-avatar { animation: none; transform: none; }
-    .msg { animation: none; }
+    .msg, .modal { animation: none; }
     .msg.streaming .text::after { animation: none; }
     .thinking .dot { animation: none; }
 }

@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @inject CouncilClient Client
+@using System.Globalization
 @using Markdig
 
 <PageTitle>Agent Council</PageTitle>
@@ -10,7 +11,7 @@
     <header class="council-header">
         <div class="crest">⚖️</div>
         <h1>The Agent Council</h1>
-        <p>Drop a topic and let four minds hash it out.</p>
+        <p>Invite your council, drop a topic, and let them hash it out.</p>
     </header>
 
     @if (!_started)
@@ -18,13 +19,20 @@
         <div class="roster">
             @foreach (var m in Members.Values.Where(m => m.Name != "You"))
             {
-                <div class="roster-card @m.Css">
+                var locked = !_groupChat && m.Name == "Moderator";
+                var on = Invited.Contains(m.Name);
+                <button type="button" class="roster-card @m.Css @(on ? "selected" : "off")" disabled="@locked"
+                        aria-pressed="@(on ? "true" : "false")"
+                        title="@(locked ? "Handoff needs the Moderator to chair" : on ? "Leave out of the council" : "Invite to the council")"
+                        @onclick="() => Toggle(m.Name)">
+                    <span class="roster-check" aria-hidden="true">@(on ? "✓" : "+")</span>
                     <span class="roster-icon">@m.Icon</span>
                     <span class="roster-name">@m.Name</span>
-                    <span class="roster-role">@m.Role</span>
-                </div>
+                    <span class="roster-role">@(locked ? "chairs the handoff" : m.Role)</span>
+                </button>
             }
         </div>
+        <p class="hint roster-hint">@SelectionHint</p>
 
         <div class="mode-row">
             <button type="button" class="mode-card @(!_groupChat ? "selected" : "")" @onclick="() => _groupChat = false">
@@ -48,7 +56,7 @@
         <div class="topic-box">
             <input @bind="_topic" @bind:event="oninput" @onkeydown="OnTopicKeyDown"
                    placeholder="e.g. Should we adopt a 4-day work week?" class="topic-input" />
-            <button class="btn" disabled="@(string.IsNullOrWhiteSpace(_topic) || !Client.IsConnected)" @onclick="StartAsync">
+            <button class="btn" disabled="@(!CanStart)" @onclick="StartAsync">
                 Convene the council
             </button>
         </div>
@@ -63,7 +71,7 @@
         <aside class="stage-rail">
             <div class="stage">
                 <div class="stage-track"></div>
-                @foreach (var m in Members.Values)
+                @foreach (var m in Seats)
                 {
                     <div class="seat @m.Css @(m.Name == _activeAgent ? "active" : "")">
                         <div class="seat-avatar">@m.Icon</div>
@@ -73,8 +81,19 @@
                 <div class="orb @(_activeAgent is null ? "" : "visible")" style="@OrbStyle()"></div>
             </div>
             <p class="stage-caption">
-                <span class="mode-badge">@(_groupChat ? $"🔄 Group chat · {_rounds} turn(s) each" : "🤝 Handoff")</span>
-                @if (_activeAgent is not null and not "You")
+                <span class="chips">
+                    <span class="mode-badge">@(_groupChat ? $"🔄 Group chat · {_rounds} turn(s) each" : "🤝 Handoff")</span>
+                    <span class="mode-badge harness-mode @_mode" title="The Pragmatist's operating mode">@(_mode == "execute" ? "⚙️" : "📝") @_mode</span>
+                    @if (_researching > 0)
+                    {
+                        <span class="mode-badge researching" title="Background tasks the Researcher is working on">🔎 researching · @_researching</span>
+                    }
+                </span>
+                @if (_approval is not null)
+                {
+                    <span class="floor-note">🔐 Waiting for your approval</span>
+                }
+                else if (_activeAgent is not null and not "You")
                 {
                     <span class="floor-note">@Meta(_activeAgent).Icon @_activeAgent has the floor — @Meta(_activeAgent).Role</span>
                 }
@@ -83,6 +102,36 @@
                     <span class="floor-note">🎙️ The floor is yours</span>
                 }
             </p>
+
+            @if (_todos.Length > 0)
+            {
+                <section class="rail-panel">
+                    <h2>🗒️ Pragmatist's todos</h2>
+                    <ul class="todo-list">
+                        @foreach (var t in _todos)
+                        {
+                            <li class="@(t.Done ? "done" : "")"><span aria-hidden="true">@(t.Done ? "☑" : "☐")</span> @t.Title</li>
+                        }
+                    </ul>
+                </section>
+            }
+
+            <section class="rail-panel">
+                <h2>📁 Workspace</h2>
+                @if (_files.Length == 0)
+                {
+                    <p class="hint">No files yet. Ask the Pragmatist to act.</p>
+                }
+                else
+                {
+                    <ul class="file-list">
+                        @foreach (var f in _files)
+                        {
+                            <li><button type="button" @onclick="() => OpenFileAsync(f)">📄 @f</button></li>
+                        }
+                    </ul>
+                }
+            </section>
         </aside>
 
         <div class="session-main">
@@ -116,19 +165,56 @@
 
         <div class="reply-box">
             <input @bind="_reply" @bind:event="oninput" @onkeydown="OnReplyKeyDown"
-                   placeholder="@(_awaitingUser ? "The council awaits your input…" : "Waiting for the council…")"
+                   placeholder="@(_awaitingUser ? "Reply to the council, or tell the Pragmatist what to build…" : "Waiting for the council…")"
                    class="reply-input" disabled="@(!_awaitingUser)" />
             <button class="btn" disabled="@(!_awaitingUser || string.IsNullOrWhiteSpace(_reply))" @onclick="ReplyAsync">
                 Send ➤
             </button>
+            <button class="btn secondary" disabled="@(!_awaitingUser)" @onclick="ActAsync"
+                    title="The Pragmatist plans, writes files to the workspace (you approve each write) and can dispatch a Researcher.">
+                🛠️ Pragmatist, act
+            </button>
         </div>
         </div>
+        </div>
+    }
+
+    @if (_approval is not null)
+    {
+        <div class="modal-backdrop">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="approval-title">
+                <h2 id="approval-title">🔐 @_approval.Agent wants to run <code>@_approval.Tool</code></h2>
+                @if (!string.IsNullOrEmpty(_approval.Arguments))
+                {
+                    <pre>@_approval.Arguments</pre>
+                }
+                <div class="modal-actions">
+                    <button class="btn danger" @onclick="@(() => RespondAsync("deny"))">Deny</button>
+                    <button class="btn secondary" @onclick="@(() => RespondAsync("always"))" title="Approve, and don't ask again for this tool in this session">Always approve</button>
+                    <button class="btn" @onclick="@(() => RespondAsync("approve"))">Approve</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_preview is { } preview)
+    {
+        <div class="modal-backdrop" @onclick="ClosePreview">
+            <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="preview-title" @onclick:stopPropagation="true">
+                <h2 id="preview-title">📄 @preview.Path</h2>
+                <div class="text">@Render(preview.Content)</div>
+                <div class="modal-actions">
+                    <button class="btn" @onclick="ClosePreview">Close</button>
+                </div>
+            </div>
         </div>
     }
 </div>
 
 @code {
     private sealed record Member(string Name, string Icon, string Role, string Css);
+
+    private sealed record Approval(string Agent, string Tool, string Arguments);
 
     // Order matters: seat positions on the stage (and the orb math) follow this order.
     private static readonly Dictionary<string, Member> Members = new()
@@ -150,6 +236,9 @@
 
     private static MarkupString Render(string text) => (MarkupString)Markdig.Markdown.ToHtml(text, Markdown);
 
+    private readonly HashSet<string> _selected = ["Moderator", "Optimist", "Skeptic", "Pragmatist"];
+    private readonly HashSet<string> _seatNames = [];
+    private readonly List<TranscriptEntry> _transcript = new();
     private string _topic = string.Empty;
     private string _reply = string.Empty;
     private bool _started;
@@ -159,35 +248,71 @@
     private int _rounds = 2;
     private string? _activeAgent;
     private string? _error;
-    private readonly List<TranscriptEntry> _transcript = new();
+    private string _mode = "plan";
+    private TodoView[] _todos = [];
+    private int _researching;
+    private string[] _files = [];
+    private Approval? _approval;
+    private (string Path, string Content)? _preview;
+
+    // Handoff always seats the Moderator, who owns the floor. Same rule the hub enforces.
+    private List<string> Invited => Members.Keys
+        .Where(n => n != "You" && ((!_groupChat && n == "Moderator") || _selected.Contains(n)))
+        .ToList();
+
+    private bool LineupOk => Invited.Count(n => n != "Moderator") >= 1 && Invited.Count >= 2;
+
+    private bool CanStart => LineupOk && !string.IsNullOrWhiteSpace(_topic) && Client.IsConnected;
+
+    private string SelectionHint => Invited.Count(n => n != "Moderator") == 0 ? "Invite at least one persona."
+        : Invited.Count < 2 ? "Group chat needs at least two agents."
+        : $"{Invited.Count} agents at the table.";
+
+    private IEnumerable<Member> Seats => Members.Values.Where(m => _seatNames.Contains(m.Name));
 
     protected override async Task OnInitializedAsync()
     {
         Client.AgentDelta += OnAgentDelta;
         Client.AwaitUserInput += OnAwaitUserInput;
         Client.CouncilError += OnCouncilError;
+        Client.ApprovalRequested += OnApprovalRequested;
+        Client.HarnessState += OnHarnessState;
+        Client.FilesChanged += OnFilesChanged;
         await Client.ConnectAsync();
         StateHasChanged();
     }
 
+    private void Toggle(string name)
+    {
+        if (!_selected.Remove(name))
+        {
+            _selected.Add(name);
+        }
+    }
+
     private string OrbStyle()
     {
-        var index = _activeAgent is null ? 0 : Members.Keys.ToList().IndexOf(_activeAgent);
-        if (index < 0) { index = 0; }
-        // Seat centers sit at 10 / 30 / 50 / 70 / 90 % of the vertical rail.
-        return $"top:{index * 20 + 10}%; --orb-color:var(--{Meta(_activeAgent ?? "Moderator").Css})";
+        var seats = Seats.Select(m => m.Name).ToList();
+        var index = Math.Max(0, seats.IndexOf(_activeAgent ?? string.Empty));
+        // Seats are evenly spaced down the rail; the orb sits at the centre of the active one.
+        return string.Create(CultureInfo.InvariantCulture,
+            $"top:{(index + .5) * 100 / Math.Max(1, seats.Count):0.##}%; --orb-color:var(--{Meta(_activeAgent ?? "Moderator").Css})");
     }
 
     private async Task StartAsync()
     {
+        if (!CanStart)
+        {
+            return;
+        }
+
+        var invited = Invited;
         _started = true;
-        _busy = true;
-        _awaitingUser = false;
-        _activeAgent = null;
-        _error = null;
-        _transcript.Clear();
-        _transcript.Add(new TranscriptEntry { Agent = "You", Text = _topic });
-        await Client.StartCouncilAsync(_topic, _groupChat ? "groupchat" : "handoff", _rounds);
+        _seatNames.Clear();
+        _seatNames.UnionWith(invited);
+        _seatNames.Add("You");
+        BeginTurn(_topic);
+        await Client.StartCouncilAsync(_topic, _groupChat ? "groupchat" : "handoff", _rounds, invited.ToArray());
     }
 
     private async Task ReplyAsync()
@@ -197,19 +322,50 @@
             return;
         }
 
-        _transcript.Add(new TranscriptEntry { Agent = "You", Text = _reply });
+        var text = _reply;
+        _reply = string.Empty;
+        BeginTurn(text);
+        await Client.SendUserInputAsync(text);
+    }
+
+    private async Task ActAsync()
+    {
+        var instruction = string.IsNullOrWhiteSpace(_reply)
+            ? "Turn the council's debate so far into a decision record in the workspace."
+            : _reply;
+        _reply = string.Empty;
+        BeginTurn($"🛠️ {instruction}");
+        await Client.AskPragmatistAsync(instruction);
+    }
+
+    private async Task RespondAsync(string decision)
+    {
+        _approval = null;
+        _busy = true;
+        _error = null;
+        await Client.RespondToApprovalAsync(decision);
+    }
+
+    private void BeginTurn(string text)
+    {
+        _transcript.Add(new TranscriptEntry { Agent = "You", Text = text });
         _busy = true;
         _awaitingUser = false;
         _activeAgent = null;
         _error = null;
-        var text = _reply;
-        _reply = string.Empty;
-        await Client.SendUserInputAsync(text);
     }
+
+    private async Task OpenFileAsync(string path)
+    {
+        var content = await Client.ReadWorkspaceFileAsync(path);
+        _preview = (path, content ?? "_This file could not be read._");
+    }
+
+    private void ClosePreview() => _preview = null;
 
     private async Task OnTopicKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_topic) && Client.IsConnected)
+        if (e.Key == "Enter")
         {
             await StartAsync();
         }
@@ -228,6 +384,12 @@
         _busy = true;
         _awaitingUser = false;
         _activeAgent = agent;
+        if (Members.ContainsKey(agent))
+        {
+            // The Pragmatist can act even when it wasn't invited to debate; give it a seat when it does.
+            _seatNames.Add(agent);
+        }
+
         var last = _transcript.Count > 0 ? _transcript[^1] : null;
         if (last is not null && last.Agent == agent)
         {
@@ -258,11 +420,37 @@
         InvokeAsync(StateHasChanged);
     }
 
+    private void OnApprovalRequested(string agent, string tool, string arguments)
+    {
+        _approval = new Approval(agent, tool, arguments);
+        _busy = false;
+        _awaitingUser = false;
+        _activeAgent = agent;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnHarnessState(string mode, TodoView[] todos, int researching)
+    {
+        _mode = mode;
+        _todos = todos;
+        _researching = researching;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnFilesChanged(string[] files)
+    {
+        _files = files;
+        InvokeAsync(StateHasChanged);
+    }
+
     public async ValueTask DisposeAsync()
     {
         Client.AgentDelta -= OnAgentDelta;
         Client.AwaitUserInput -= OnAwaitUserInput;
         Client.CouncilError -= OnCouncilError;
+        Client.ApprovalRequested -= OnApprovalRequested;
+        Client.HarnessState -= OnHarnessState;
+        Client.FilesChanged -= OnFilesChanged;
         await Client.DisposeAsync();
     }
 }
