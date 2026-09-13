@@ -20,7 +20,7 @@ test/AgentCouncil.AppHost.Tests   AppHost model test
   - The workspace is `FileSystemAgentFileStore` over `<content root>/workspace` (git-ignored), **shared by all connections**.
 - **`Workflow/CouncilWorkflow.cs`** — builds the workflows per session for the invited line-up. `BuildHandoff(personas)`: Moderator ↔ each persona, `EnableReturnToPrevious()`. `BuildGroupChat(members, rounds)`: `RoundRobinGroupChatManager` with `MaximumIterationCount = rounds * members.Count`.
 - **`Hubs/CouncilHub.cs`** + **`CouncilSessionManager.cs`** — SignalR hub at `/councilhub`. One `CouncilSession` per connection. It holds either the handoff `StreamingRun` (persistent) or the group chat workflow plus a `List<ChatMessage>` history (fresh run per turn, reseeded from `WorkflowOutputEvent`). Alongside that it keeps the harness agent's own `AgentSession`, the debate text the harness hasn't seen, and the pending approval.
-  - Server methods: `StartCouncil(topic, mode, roundsPerAgent, agentNames[])` (`mode` = `"handoff"` | `"groupchat"`; handoff always seats the Moderator; at least one persona and two agents), `SendUserInput(text)`, `AskPragmatist(instruction)`, `RespondToApproval(decision)` (`"approve"` | `"always"` | `"deny"`), `ReadWorkspaceFile(path)`.
+  - Server methods: `StartCouncil(topic, mode, roundsPerAgent, agentNames[])` (`mode` = `"handoff"` | `"groupchat"`; handoff always seats the Moderator; at least one persona and two agents), `SendUserInput(text)`, `AskPragmatist(instruction)`, `RespondToApproval(decision)` (`"approve"` | `"always"` | `"deny"`), `ReadWorkspaceFile(path)`, `DeleteWorkspaceFile(path)`.
   - Client-bound: `AgentDelta(agent, text)` (text or a `` `🔧 tool file` `` note), `AwaitUserInput()`, `CouncilError(message)`, `ApprovalRequested(agent, tool, argsJson)`, `HarnessState(mode, TodoView[] todos, researching)`, `FilesChanged(paths[])`.
   - Debater instructions cap every turn at 2 sentences (demo-friendly pacing).
   - `EndAsync` calls `BackgroundAgentsProvider.ReleaseSessionAsync` so Researcher tasks stop when the tab closes.
@@ -28,11 +28,11 @@ test/AgentCouncil.AppHost.Tests   AppHost model test
 
 ### AgentCouncil.Web
 - **`Services/CouncilClient.cs`** — per-circuit `HubConnection` to the `agents` service. Resolves the hub URL from Aspire service-discovery config (`services:agents:https:0`, falling back to `http`).
-- **`Components/Pages/Council.razor`** — start screen: roster cards are **invite toggles** (Moderator locked on in handoff) → mode picker (handoff / group chat + turns-per-agent) → topic box.
+- **`Components/Pages/Council.razor`** — two animated start stages. (1) *Who do you want to talk with?*: character cards (🛡️ Sir Gavelot, 🏴‍☠️ Cap'n Sunny, 🧐 Baron von Doubt, 🔨 Master Anvil) are **invite toggles**. (2) The chosen party → mode picker (handoff / group chat + turns-per-agent) → topic box; handoff auto-seats the Moderator.
   - Session **stage rail**: seats for the invited agents only, with a glowing "floor token" on the current speaker (derived client-side from `AgentDelta` speaker changes). Below it: mode chips (orchestration, Pragmatist `plan`/`execute`, researching count), the Pragmatist's **todo panel** and the **workspace** file list (click to preview, rendered as markdown).
   - Transcript: emoji avatar, colored name and role chip per message; bodies render **markdown via Markdig** (`DisableHtml` — model output is never injected as raw HTML).
-  - Reply box: **Send** (continue the debate) and **🛠️ Pragmatist, act** (run the harness). An **approval modal** offers Approve / Always approve / Deny.
-  - Agent identity (icon/role/color) lives in the `Members` dictionary in this file.
+  - Reply box: **Send** (continue the debate) and **🔨 Master Anvil, act** (run the harness). In plan mode with open todos a **Confirm plan** bar appears. An **approval modal** offers Approve / Always approve / Deny.
+  - Agent identity (character title, icon, role, blurb, catchphrase, color) lives in the `Members` dictionary in this file; `Name` stays the hub key.
 
 ## How to run
 
@@ -46,7 +46,7 @@ test/AgentCouncil.AppHost.Tests   AppHost model test
    ```
 3. Open the **Aspire dashboard** (URL printed on startup) and confirm `agents` + `web` are healthy.
 4. **DevUI**: open `https://localhost:<agents-port>/devui` → the four debaters appear; send a topic and watch turns + traces.
-5. **Blazor**: open the `web` endpoint → invite agents → drop a topic (e.g. *"Should we adopt a 4-day work week?"*) → debate → press **🛠️ Pragmatist, act**. It proposes todos in plan mode; confirm and it switches to execute. Approve its first write, pick *Always approve* for the next, and watch `decision-record.md` appear in the workspace pane. Then ask the Skeptic to rebut the record (it greps the file).
+5. **Blazor**: open the `web` endpoint → invite agents → drop a topic (e.g. *"Should we adopt a 4-day work week?"*) → debate → press **🔨 Master Anvil, act**. It proposes todos in plan mode; confirm and it switches to execute. Approve its first write, pick *Always approve* for the next, and watch `decision-record.md` appear in the workspace pane. Then ask the Skeptic to rebut the record (it greps the file).
 6. Agent/LLM OpenTelemetry traces, including the token split by model, show up in the Aspire dashboard.
 
 ## Build & test

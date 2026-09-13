@@ -74,6 +74,9 @@ public sealed class CouncilClient(IConfiguration configuration) : IAsyncDisposab
     public Task<string?> ReadWorkspaceFileAsync(string path) =>
         _connection?.InvokeAsync<string?>("ReadWorkspaceFile", path) ?? Task.FromResult<string?>(null);
 
+    public Task DeleteWorkspaceFileAsync(string path) =>
+        _connection?.InvokeAsync("DeleteWorkspaceFile", path) ?? Task.CompletedTask;
+
     public async ValueTask DisposeAsync()
     {
         if (_connection is not null)

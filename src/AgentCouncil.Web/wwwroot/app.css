@@ -68,7 +68,21 @@ html, body {
 
 .council-header p { color: var(--muted); margin: 0; }
 
-/* ---- Roster (start screen) ---- */
+/* ---- Start stages: pick your company, then the topic ---- */
+
+.council-header .subtitle {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.3rem;
+    font-style: italic;
+    color: var(--text);
+}
+
+/* Every stage change (company → topic → session) blurs in; keyed elements replay it. */
+.step, .session, .council-header .subtitle { animation: stage-in .5s cubic-bezier(.2, .8, .2, 1) backwards; }
+
+@keyframes stage-in {
+    from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+}
 
 .roster {
     display: grid;
@@ -82,17 +96,69 @@ html, body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: .25rem;
-    padding: 1rem .5rem .85rem;
+    gap: .2rem;
+    padding: 1.3rem .7rem 1rem;
     border-radius: .8rem;
     background: color-mix(in srgb, var(--seat-color) 6%, var(--panel));
     border: 1px solid color-mix(in srgb, var(--seat-color) 30%, var(--panel-edge));
     border-top: 3px solid var(--seat-color);
+    text-align: center;
+    /* Dealt onto the table one after another. */
+    animation: deal .55s cubic-bezier(.2, .8, .2, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 90ms);
 }
 
-.roster-icon { font-size: 1.7rem; }
-.roster-name { font-weight: 700; color: var(--seat-color); }
+@keyframes deal {
+    from { opacity: 0; transform: translateY(28px) rotate(calc((var(--i, 0) - 1.5) * 4deg)) scale(.92); }
+}
+
+.roster-icon {
+    display: grid;
+    place-items: center;
+    width: 4.4rem;
+    height: 4.4rem;
+    margin-bottom: .45rem;
+    border-radius: 50%;
+    font-size: 2.3rem;
+    background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--seat-color) 24%, #222732), #1a1e27 72%);
+    border: 2px solid color-mix(in srgb, var(--seat-color) 55%, #2e3546);
+    transition: transform .3s ease;
+}
+
+.roster-name { font-family: Georgia, "Times New Roman", serif; font-size: 1.1rem; font-weight: 700; color: var(--seat-color); }
 .roster-role { font-size: .78rem; color: var(--muted); font-style: italic; }
+.roster-blurb { margin: .3rem 0 .8rem; font-size: .82rem; line-height: 1.35; color: var(--muted); }
+
+/* Catchphrase bubble: pops up when the character is invited. */
+.roster-quote {
+    position: relative;
+    margin-top: auto;
+    padding: .45rem .65rem;
+    border-radius: .6rem;
+    background: color-mix(in srgb, var(--seat-color) 14%, #1d212b);
+    border: 1px solid color-mix(in srgb, var(--seat-color) 35%, transparent);
+    font-size: .8rem;
+    font-style: italic;
+    line-height: 1.3;
+    opacity: 0;
+    transform: translateY(8px) scale(.9);
+    transition: opacity .25s, transform .35s cubic-bezier(.3, 1.5, .5, 1);
+}
+
+.roster-quote::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    background: inherit;
+    border-left: inherit;
+    border-top: inherit;
+    transform: translateX(-50%) rotate(45deg);
+}
+
+.roster-card.selected .roster-quote { opacity: 1; transform: none; }
 
 /* Roster cards are invite toggles. */
 button.roster-card {
@@ -100,18 +166,28 @@ button.roster-card {
     font: inherit;
     color: var(--text);
     cursor: pointer;
-    transition: opacity .2s, filter .2s, box-shadow .2s;
+    transition: opacity .2s, filter .2s, box-shadow .2s, transform .3s;
 }
 
 .roster-card.selected {
-    box-shadow: 0 0 0 1px var(--seat-color), 0 0 16px color-mix(in srgb, var(--seat-color) 22%, transparent);
+    transform: translateY(-4px);
+    box-shadow: 0 0 0 1px var(--seat-color), 0 8px 22px color-mix(in srgb, var(--seat-color) 22%, transparent);
 }
 
 .roster-card.off { opacity: .45; filter: grayscale(.7); }
 .roster-card.off:hover { opacity: .75; }
-.roster-card:disabled { cursor: default; }
+.roster-card.off .roster-icon { transform: scale(.85) rotate(-8deg); }
 
-.roster-card:focus-visible, .mode-card:focus-visible, .file-list button:focus-visible {
+/* Only after the first click, so the initial line-up doesn't hop while it is dealt. */
+.roster.touched .roster-card.selected .roster-icon { animation: hop .55s cubic-bezier(.3, 1.5, .5, 1); }
+
+@keyframes hop {
+    0% { transform: scale(.85) rotate(-8deg); }
+    45% { transform: translateY(-14px) scale(1.12) rotate(8deg); }
+    100% { transform: none; }
+}
+
+.roster-card:focus-visible, .mode-card:focus-visible, .file-list button:focus-visible, .link-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
@@ -125,7 +201,54 @@ button.roster-card {
     color: var(--seat-color);
 }
 
-.roster-hint { margin: -.5rem 0 1rem; font-size: .85rem; }
+.step-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+/* The chosen company, hopping in above the topic stage. */
+.party {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    margin: 0 0 1.1rem;
+}
+
+.party-member {
+    display: grid;
+    place-items: center;
+    width: 2.9rem;
+    height: 2.9rem;
+    border-radius: 50%;
+    font-size: 1.45rem;
+    background: #222732;
+    border: 2px solid var(--seat-color);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--seat-color) 30%, transparent);
+    animation: hop-in .5s cubic-bezier(.3, 1.5, .5, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 80ms + .15s);
+}
+
+@keyframes hop-in {
+    from { opacity: 0; transform: translateY(-16px) scale(.6); }
+}
+
+.link-btn {
+    margin-left: .4rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: .88rem;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
 
 /* ---- Orchestration mode picker ---- */
 
@@ -205,6 +328,8 @@ button.roster-card {
 
 .seat {
     --seat-color: var(--muted);
+    animation: deal .5s cubic-bezier(.2, .8, .2, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 90ms + .2s);
     position: relative;
     z-index: 1;
     display: flex;
@@ -212,10 +337,10 @@ button.roster-card {
     gap: .7rem;
 }
 
-.seat.moderator, .msg.moderator, .roster-card.moderator { --seat-color: var(--moderator); }
-.seat.optimist, .msg.optimist, .roster-card.optimist { --seat-color: var(--optimist); }
-.seat.skeptic, .msg.skeptic, .roster-card.skeptic { --seat-color: var(--skeptic); }
-.seat.pragmatist, .msg.pragmatist, .roster-card.pragmatist { --seat-color: var(--pragmatist); }
+.seat.moderator, .msg.moderator, .roster-card.moderator, .party-member.moderator { --seat-color: var(--moderator); }
+.seat.optimist, .msg.optimist, .roster-card.optimist, .party-member.optimist { --seat-color: var(--optimist); }
+.seat.skeptic, .msg.skeptic, .roster-card.skeptic, .party-member.skeptic { --seat-color: var(--skeptic); }
+.seat.pragmatist, .msg.pragmatist, .roster-card.pragmatist, .party-member.pragmatist { --seat-color: var(--pragmatist); }
 .seat.you, .msg.you { --seat-color: var(--you); }
 .msg.other { --seat-color: var(--other); }
 
@@ -344,6 +469,29 @@ button.roster-card {
 }
 
 .file-list button:hover { border-color: var(--panel-edge); background: #1d212b; }
+
+.file-list li { display: flex; gap: .2rem; }
+
+.file-list .file-delete { width: auto; flex: none; color: var(--muted); }
+.file-list .file-delete:hover { color: #f87171; }
+
+/* ---- Plan confirmation ---- */
+
+.plan-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .6rem;
+    margin-top: 1rem;
+    padding: .7rem .9rem;
+    border-radius: .6rem;
+    background: var(--panel);
+    border: 1px solid color-mix(in srgb, var(--pragmatist) 45%, #2a2f3a);
+    font-size: .9rem;
+}
+
+.plan-bar .btn { padding: .55rem 1rem; }
 
 /* ---- Topic / reply ---- */
 
@@ -612,6 +760,9 @@ button.roster-card {
     .orb { transition: opacity .3s; }
     .seat.active .seat-avatar { animation: none; transform: none; }
     .msg, .modal { animation: none; }
+    .step, .session, .council-header .subtitle, .roster-card, .seat, .party-member { animation: none; }
+    .roster.touched .roster-card.selected .roster-icon { animation: none; }
+    .roster-card, .roster-icon, .roster-quote { transform: none !important; }
     .msg.streaming .text::after { animation: none; }
     .thinking .dot { animation: none; }
 }

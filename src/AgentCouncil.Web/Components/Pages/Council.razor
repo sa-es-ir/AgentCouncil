@@ -11,59 +11,86 @@
     <header class="council-header">
         <div class="crest">⚖️</div>
         <h1>The Agent Council</h1>
-        <p>Invite your council, drop a topic, and let them hash it out.</p>
+        <p @key="Subtitle" class="subtitle">@Subtitle</p>
     </header>
 
-    @if (!_started)
+    @if (!_started && _step == 0)
     {
-        <div class="roster">
-            @foreach (var m in Members.Values.Where(m => m.Name != "You"))
-            {
-                var locked = !_groupChat && m.Name == "Moderator";
-                var on = Invited.Contains(m.Name);
-                <button type="button" class="roster-card @m.Css @(on ? "selected" : "off")" disabled="@locked"
-                        aria-pressed="@(on ? "true" : "false")"
-                        title="@(locked ? "Handoff needs the Moderator to chair" : on ? "Leave out of the council" : "Invite to the council")"
-                        @onclick="() => Toggle(m.Name)">
-                    <span class="roster-check" aria-hidden="true">@(on ? "✓" : "+")</span>
-                    <span class="roster-icon">@m.Icon</span>
-                    <span class="roster-name">@m.Name</span>
-                    <span class="roster-role">@(locked ? "chairs the handoff" : m.Role)</span>
+        <div class="step" @key="0">
+            <div class="roster @(_touched ? "touched" : "")">
+                @foreach (var (m, i) in Members.Values.Where(x => x.Name != "You").Select((x, n) => (x, n)))
+                {
+                    var on = _selected.Contains(m.Name);
+                    <button type="button" class="roster-card @m.Css @(on ? "selected" : "off")" style="--i:@i"
+                            aria-pressed="@(on ? "true" : "false")"
+                            title="@(on ? $"Send {m.Title} home" : $"Invite {m.Title}")"
+                            @onclick="() => Toggle(m.Name)">
+                        <span class="roster-check" aria-hidden="true">@(on ? "✓" : "+")</span>
+                        <span class="roster-icon" aria-hidden="true">@m.Icon</span>
+                        <span class="roster-name">@m.Title</span>
+                        <span class="roster-role">@m.Role</span>
+                        <span class="roster-blurb">@m.Blurb</span>
+                        <span class="roster-quote">“@m.Quote”</span>
+                    </button>
+                }
+            </div>
+            <div class="step-actions">
+                <span class="hint">@PartyHint</span>
+                <button class="btn" disabled="@(!PartyOk)" @onclick="() => _step = 1">Next: pick a topic</button>
+            </div>
+        </div>
+    }
+    else if (!_started)
+    {
+        <div class="step" @key="1">
+            <div class="party">
+                @foreach (var (m, i) in Invited.Select((x, n) => (Meta(x), n)))
+                {
+                    <span class="party-member @m.Css" style="--i:@i" title="@m.Title, @m.Role">@m.Icon</span>
+                }
+                <button type="button" class="link-btn" @onclick="() => _step = 0">Change company</button>
+            </div>
+
+            <div class="mode-row">
+                <button type="button" class="mode-card @(!_groupChat ? "selected" : "")" @onclick="() => _groupChat = false">
+                    <span class="mode-name">🤝 Handoff</span>
+                    <span class="mode-desc">Sir Gavelot decides who speaks next and when to ask you.</span>
                 </button>
+                <button type="button" class="mode-card @(_groupChat ? "selected" : "")" @onclick="() => _groupChat = true">
+                    <span class="mode-name">🔄 Group chat</span>
+                    <span class="mode-desc">Round-robin: everyone gets the floor a fixed number of times.</span>
+                </button>
+            </div>
+
+            @if (!_groupChat && !_selected.Contains("Moderator"))
+            {
+                <p class="hint">Sir Gavelot joins to chair the handoff.</p>
+            }
+
+            @if (_groupChat)
+            {
+                <label class="rounds-row">
+                    Turns per agent
+                    <input type="number" min="1" max="10" @bind="_rounds" class="rounds-input" />
+                </label>
+            }
+
+            <div class="topic-box">
+                <input @bind="_topic" @bind:event="oninput" @onkeydown="OnTopicKeyDown"
+                       placeholder="e.g. Should we adopt a 4-day work week?" class="topic-input" />
+                <button class="btn" disabled="@(!CanStart)" @onclick="StartAsync">
+                    Convene the council
+                </button>
+            </div>
+            @if (!LineupOk)
+            {
+                <p class="hint">Group chat needs at least two. Change company to add someone.</p>
+            }
+            @if (!Client.IsConnected)
+            {
+                <p class="hint">Connecting to the council…</p>
             }
         </div>
-        <p class="hint roster-hint">@SelectionHint</p>
-
-        <div class="mode-row">
-            <button type="button" class="mode-card @(!_groupChat ? "selected" : "")" @onclick="() => _groupChat = false">
-                <span class="mode-name">🤝 Handoff</span>
-                <span class="mode-desc">The Moderator decides who speaks next and when to ask you.</span>
-            </button>
-            <button type="button" class="mode-card @(_groupChat ? "selected" : "")" @onclick="() => _groupChat = true">
-                <span class="mode-name">🔄 Group chat</span>
-                <span class="mode-desc">Round-robin: every agent gets the floor a fixed number of times.</span>
-            </button>
-        </div>
-
-        @if (_groupChat)
-        {
-            <label class="rounds-row">
-                Turns per agent
-                <input type="number" min="1" max="10" @bind="_rounds" class="rounds-input" />
-            </label>
-        }
-
-        <div class="topic-box">
-            <input @bind="_topic" @bind:event="oninput" @onkeydown="OnTopicKeyDown"
-                   placeholder="e.g. Should we adopt a 4-day work week?" class="topic-input" />
-            <button class="btn" disabled="@(!CanStart)" @onclick="StartAsync">
-                Convene the council
-            </button>
-        </div>
-        @if (!Client.IsConnected)
-        {
-            <p class="hint">Connecting to the council…</p>
-        }
     }
     else
     {
@@ -71,11 +98,11 @@
         <aside class="stage-rail">
             <div class="stage">
                 <div class="stage-track"></div>
-                @foreach (var m in Seats)
+                @foreach (var (m, i) in Seats.Select((x, n) => (x, n)))
                 {
-                    <div class="seat @m.Css @(m.Name == _activeAgent ? "active" : "")">
+                    <div @key="m.Name" class="seat @m.Css @(m.Name == _activeAgent ? "active" : "")" style="--i:@i">
                         <div class="seat-avatar">@m.Icon</div>
-                        <div class="seat-name">@m.Name</div>
+                        <div class="seat-name">@m.Title</div>
                     </div>
                 }
                 <div class="orb @(_activeAgent is null ? "" : "visible")" style="@OrbStyle()"></div>
@@ -95,7 +122,7 @@
                 }
                 else if (_activeAgent is not null and not "You")
                 {
-                    <span class="floor-note">@Meta(_activeAgent).Icon @_activeAgent has the floor — @Meta(_activeAgent).Role</span>
+                    <span class="floor-note">@Meta(_activeAgent).Icon @Meta(_activeAgent).Title has the floor — @Meta(_activeAgent).Role</span>
                 }
                 else if (_awaitingUser)
                 {
@@ -127,7 +154,11 @@
                     <ul class="file-list">
                         @foreach (var f in _files)
                         {
-                            <li><button type="button" @onclick="() => OpenFileAsync(f)">📄 @f</button></li>
+                            <li>
+                                <button type="button" @onclick="() => OpenFileAsync(f)">📄 @f</button>
+                                <button type="button" class="file-delete" title="Delete @f" aria-label="Delete @f"
+                                        @onclick="() => DeleteFile(f)">✕</button>
+                            </li>
                         }
                     </ul>
                 }
@@ -145,7 +176,7 @@
                     <div class="avatar" title="@m.Role">@m.Icon</div>
                     <div class="msg-body">
                         <div class="msg-header">
-                            <span class="speaker">@entry.Agent</span>
+                            <span class="speaker">@m.Title</span>
                             <span class="role-chip">@m.Role</span>
                         </div>
                         <div class="text">@Render(entry.Text)</div>
@@ -163,6 +194,14 @@
             <div class="error">⚠️ @_error</div>
         }
 
+        @if (PlanAwaitingConfirm)
+        {
+            <div class="plan-bar">
+                <span>📝 Master Anvil planned @_todos.Count(t => !t.Done) todo(s). Confirm to let him write, or type changes below and press <strong>🔨 Master Anvil, act</strong>.</span>
+                <button class="btn" @onclick="ConfirmPlanAsync">✅ Confirm plan</button>
+            </div>
+        }
+
         <div class="reply-box">
             <input @bind="_reply" @bind:event="oninput" @onkeydown="OnReplyKeyDown"
                    placeholder="@(_awaitingUser ? "Reply to the council, or tell the Pragmatist what to build…" : "Waiting for the council…")"
@@ -172,7 +211,7 @@
             </button>
             <button class="btn secondary" disabled="@(!_awaitingUser)" @onclick="ActAsync"
                     title="The Pragmatist plans, writes files to the workspace (you approve each write) and can dispatch a Researcher.">
-                🛠️ Pragmatist, act
+                🔨 Master Anvil, act
             </button>
         </div>
         </div>
@@ -183,7 +222,7 @@
     {
         <div class="modal-backdrop">
             <div class="modal" role="dialog" aria-modal="true" aria-labelledby="approval-title">
-                <h2 id="approval-title">🔐 @_approval.Agent wants to run <code>@_approval.Tool</code></h2>
+                <h2 id="approval-title">🔐 @Meta(_approval.Agent).Title wants to run <code>@_approval.Tool</code></h2>
                 @if (!string.IsNullOrEmpty(_approval.Arguments))
                 {
                     <pre>@_approval.Arguments</pre>
@@ -209,30 +248,49 @@
             </div>
         </div>
     }
+
+    @if (_pendingDelete is { } doomed)
+    {
+        <div class="modal-backdrop" @onclick="CancelDelete">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-title" @onclick:stopPropagation="true">
+                <h2 id="delete-title">🗑️ Delete <code>@doomed</code>?</h2>
+                <p class="hint">It is removed from the shared workspace for everyone. This can't be undone.</p>
+                <div class="modal-actions">
+                    <button class="btn secondary" @onclick="CancelDelete">Cancel</button>
+                    <button class="btn danger" @onclick="ConfirmDeleteAsync">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
-    private sealed record Member(string Name, string Icon, string Role, string Css);
+    // Name is the agent's key on the hub; Title is the character the UI shows.
+    private sealed record Member(string Name, string Icon, string Title, string Role, string Css, string Blurb = "", string Quote = "");
 
     private sealed record Approval(string Agent, string Tool, string Arguments);
 
     // Order matters: seat positions on the stage (and the orb math) follow this order.
     private static readonly Dictionary<string, Member> Members = new()
     {
-        ["Moderator"] = new("Moderator", "⚖️", "chairs the floor", "moderator"),
-        ["Optimist"] = new("Optimist", "☀️", "argues the upside", "optimist"),
-        ["Skeptic"] = new("Skeptic", "🔍", "hunts the risk", "skeptic"),
-        ["Pragmatist"] = new("Pragmatist", "🧭", "charts the path", "pragmatist"),
-        ["You"] = new("You", "🎙️", "sets the agenda", "you"),
+        ["Moderator"] = new("Moderator", "🛡️", "Sir Gavelot", "the Moderator", "moderator",
+            "Keeps the round table civil. Mostly.", "Order! One knight at a time."),
+        ["Optimist"] = new("Optimist", "🏴‍☠️", "Cap'n Sunny", "the Optimist", "optimist",
+            "Sees buried treasure in every storm.", "Arr, what could possibly go wrong?"),
+        ["Skeptic"] = new("Skeptic", "🧐", "Baron von Doubt", "the Skeptic", "skeptic",
+            "Suspects everything. Twice.", "Fascinating. Now show me the receipts."),
+        ["Pragmatist"] = new("Pragmatist", "🔨", "Master Anvil", "the Pragmatist", "pragmatist",
+            "Hammers talk into actual files.", "Less talk. More anvil."),
+        ["You"] = new("You", "👑", "Your Majesty", "sets the agenda", "you"),
     };
 
-    private static readonly Member Unknown = new("Council", "🏛️", "member", "other");
+    private static readonly Member Unknown = new("Council", "🏛️", "Council", "member", "other");
 
     // HTML is disabled so raw markup coming back from the model is rendered as text, not injected.
     private static readonly MarkdownPipeline Markdown =
         new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
 
-    private static Member Meta(string agent) => Members.GetValueOrDefault(agent, Unknown);
+    private static Member Meta(string agent) => Members.GetValueOrDefault(agent) ?? (Unknown with { Name = agent, Title = agent });
 
     private static MarkupString Render(string text) => (MarkupString)Markdig.Markdown.ToHtml(text, Markdown);
 
@@ -242,6 +300,8 @@
     private string _topic = string.Empty;
     private string _reply = string.Empty;
     private bool _started;
+    private int _step;
+    private bool _touched;
     private bool _busy;
     private bool _awaitingUser;
     private bool _groupChat;
@@ -254,6 +314,7 @@
     private string[] _files = [];
     private Approval? _approval;
     private (string Path, string Content)? _preview;
+    private string? _pendingDelete;
 
     // Handoff always seats the Moderator, who owns the floor. Same rule the hub enforces.
     private List<string> Invited => Members.Keys
@@ -264,9 +325,15 @@
 
     private bool CanStart => LineupOk && !string.IsNullOrWhiteSpace(_topic) && Client.IsConnected;
 
-    private string SelectionHint => Invited.Count(n => n != "Moderator") == 0 ? "Invite at least one persona."
-        : Invited.Count < 2 ? "Group chat needs at least two agents."
-        : $"{Invited.Count} agents at the table.";
+    private bool PartyOk => _selected.Any(n => n != "Moderator");
+
+    private string PartyHint => PartyOk
+        ? $"{_selected.Count} at the table."
+        : "Pick at least one of Cap'n Sunny, Baron von Doubt or Master Anvil.";
+
+    private string Subtitle => _started ? "The council is in session."
+        : _step == 0 ? "Who do you want to talk with?"
+        : "What should they argue about?";
 
     private IEnumerable<Member> Seats => Members.Values.Where(m => _seatNames.Contains(m.Name));
 
@@ -284,6 +351,7 @@
 
     private void Toggle(string name)
     {
+        _touched = true;
         if (!_selected.Remove(name))
         {
             _selected.Add(name);
@@ -334,8 +402,17 @@
             ? "Turn the council's debate so far into a decision record in the workspace."
             : _reply;
         _reply = string.Empty;
-        BeginTurn($"🛠️ {instruction}");
+        BeginTurn($"🔨 {instruction}");
         await Client.AskPragmatistAsync(instruction);
+    }
+
+    // Plan mode with open todos means the Pragmatist is waiting on the user's go-ahead.
+    private bool PlanAwaitingConfirm => _awaitingUser && _mode == "plan" && _todos.Any(t => !t.Done);
+
+    private async Task ConfirmPlanAsync()
+    {
+        BeginTurn("✅ Plan confirmed");
+        await Client.AskPragmatistAsync("Confirmed. Switch to execute mode and carry out the plan.");
     }
 
     private async Task RespondAsync(string decision)
@@ -359,6 +436,26 @@
     {
         var content = await Client.ReadWorkspaceFileAsync(path);
         _preview = (path, content ?? "_This file could not be read._");
+    }
+
+    private void DeleteFile(string path) => _pendingDelete = path;
+
+    private void CancelDelete() => _pendingDelete = null;
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_pendingDelete is not { } path)
+        {
+            return;
+        }
+
+        _pendingDelete = null;
+        if (_preview?.Path == path)
+        {
+            _preview = null;
+        }
+
+        await Client.DeleteWorkspaceFileAsync(path);
     }
 
     private void ClosePreview() => _preview = null;

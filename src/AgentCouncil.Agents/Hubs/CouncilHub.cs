@@ -125,6 +125,23 @@ public sealed class CouncilHub(CouncilSessionManager sessions, CouncilAgents age
         }
     }
 
+    /// <summary>Deletes a workspace file and pushes the refreshed file list to the caller.</summary>
+    public async Task DeleteWorkspaceFile(string path)
+    {
+        try
+        {
+            // Same safe path resolution as reads: nothing outside the workspace root can be deleted.
+            await agents.Store.DeleteAsync(path, Context.ConnectionAborted);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Rejected workspace delete of {Path}", path);
+            await Clients.Caller.SendAsync("CouncilError", $"Could not delete {path}.");
+        }
+
+        await Clients.Caller.SendAsync("FilesChanged", agents.ListWorkspaceFiles());
+    }
+
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         await sessions.EndAsync(Context.ConnectionId);
