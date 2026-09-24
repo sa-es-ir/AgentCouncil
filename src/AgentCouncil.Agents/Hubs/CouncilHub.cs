@@ -142,6 +142,13 @@ public sealed class CouncilHub(CouncilSessionManager sessions, CouncilAgents age
         await Clients.Caller.SendAsync("FilesChanged", agents.ListWorkspaceFiles());
     }
 
+    /// <summary>Sends the workspace file list up front, so the start screen can offer resuming from a record.</summary>
+    public override async Task OnConnectedAsync()
+    {
+        await Clients.Caller.SendAsync("FilesChanged", agents.ListWorkspaceFiles());
+        await base.OnConnectedAsync();
+    }
+
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         await sessions.EndAsync(Context.ConnectionId);

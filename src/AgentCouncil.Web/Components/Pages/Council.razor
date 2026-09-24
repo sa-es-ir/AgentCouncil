@@ -113,9 +113,24 @@
                 </label>
             }
 
+            @if (Records.Any())
+            {
+                <label class="rounds-row">
+                    📄 Resume from
+                    <select @bind="_resumeFrom" class="rounds-input resume-select">
+                        <option value="">— a fresh debate —</option>
+                        @foreach (var f in Records)
+                        {
+                            <option value="@f">@f</option>
+                        }
+                    </select>
+                </label>
+            }
+
             <div class="topic-box">
                 <input @bind="_topic" @bind:event="oninput" @onkeydown="OnTopicKeyDown"
-                       placeholder="e.g. Should we adopt a 4-day work week?" class="topic-input" />
+                       placeholder="@(!Resuming ? "e.g. Should we adopt a 4-day work week?" : "What should they pick up on? (optional)")"
+                       class="topic-input" />
                 <button class="btn" disabled="@(!CanStart)" @onclick="StartAsync">
                     Convene the council
                 </button>
@@ -127,6 +142,10 @@
             @if (!Client.IsConnected)
             {
                 <p class="hint">Connecting to the council…</p>
+            }
+            @if (_error is not null)
+            {
+                <p class="hint">⚠️ @_error</p>
             }
         </div>
     }
@@ -348,6 +367,7 @@
     private readonly HashSet<string> _seatNames = [];
     private readonly List<TranscriptEntry> _transcript = new();
     private string _topic = string.Empty;
+    private string? _resumeFrom;
     private string _reply = string.Empty;
     private bool _started;
     private int _step;
@@ -373,7 +393,12 @@
 
     private bool LineupOk => Invited.Count(n => n != "Moderator") >= 1 && Invited.Count >= 2;
 
-    private bool CanStart => LineupOk && !string.IsNullOrWhiteSpace(_topic) && Client.IsConnected;
+    private bool CanStart => LineupOk && (Resuming || !string.IsNullOrWhiteSpace(_topic)) && Client.IsConnected;
+
+    private bool Resuming => !string.IsNullOrEmpty(_resumeFrom);
+
+    // ponytail: any markdown in the workspace counts as a record the council can pick back up.
+    private IEnumerable<string> Records => _files.Where(f => f.EndsWith(".md", StringComparison.OrdinalIgnoreCase));
 
     private bool PartyOk => _selected.Any(n => n != "Moderator");
 
@@ -476,14 +501,31 @@
             return;
         }
 
+        var topic = _topic;
+        var shown = topic;
+        if (Resuming)
+        {
+            // The record goes in as the opening message, so the debaters and the harness both see it,
+            // and the harness knows which file to update rather than writing a new one.
+            if (await Client.ReadWorkspaceFileAsync(_resumeFrom!) is not { } record)
+            {
+                _error = $"Could not read {_resumeFrom}.";
+                return;
+            }
+
+            var ask = string.IsNullOrWhiteSpace(topic) ? "Pick up where we left off: take on the open questions." : topic;
+            shown = $"📄 Resuming from {_resumeFrom}\n\n{ask}";
+            topic = $"We are resuming an earlier council session. Its record, workspace file `{_resumeFrom}`, reads:\n\n{record}\n\n{ask}";
+        }
+
         var invited = Invited;
         _started = true;
         _seatNames.Clear();
         _seatNames.UnionWith(invited);
         _seatNames.Add("You");
-        BeginTurn(_topic);
+        BeginTurn(shown);
         await Client.StartCouncilAsync(
-            _topic, _groupChat ? "groupchat" : "handoff", _rounds, invited.Select(Tuning).ToArray());
+            topic, _groupChat ? "groupchat" : "handoff", _rounds, invited.Select(Tuning).ToArray());
     }
 
     private async Task ReplyAsync()

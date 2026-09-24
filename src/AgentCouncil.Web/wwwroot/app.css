@@ -453,6 +453,8 @@ html, body {
     font-size: .95rem;
 }
 
+.rounds-input.resume-select { width: auto; max-width: 100%; }
+
 .rounds-input {
     width: 4.5rem;
     padding: .45rem .6rem;
