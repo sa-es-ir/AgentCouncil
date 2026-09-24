@@ -2,7 +2,6 @@ using AgentCouncil.Agents;
 using AgentCouncil.Agents.Agents;
 using AgentCouncil.Agents.Hubs;
 using AgentCouncil.Agents.Workflow;
-using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.DevUI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Workflows;
@@ -57,7 +56,7 @@ if (app.Environment.IsDevelopment())
 
     // The full-roster handoff graph as Mermaid, for slides.
     app.MapGet("/council/graph", (CouncilAgents agents, CouncilWorkflow council) =>
-        WorkflowVisualizer.ToMermaidString(council.BuildHandoff(agents.Personas)));
+        WorkflowVisualizer.ToMermaidString(council.BuildHandoff(agents.Moderator, agents.Personas)));
 }
 
 app.Run();

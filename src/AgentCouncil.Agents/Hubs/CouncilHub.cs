@@ -35,14 +35,14 @@ public sealed class CouncilHub(CouncilSessionManager sessions, CouncilAgents age
     /// <summary>Begins a new council session on the given topic.</summary>
     /// <param name="mode">"handoff" or "groupchat".</param>
     /// <param name="roundsPerAgent">Group chat only: how many times each agent speaks per user turn.</param>
-    /// <param name="agentNames">The invited debaters.</param>
-    public async Task StartCouncil(string topic, string mode, int roundsPerAgent, string[] agentNames)
+    /// <param name="lineup">The invited debaters, each with its per-turn token budget and reasoning effort.</param>
+    public async Task StartCouncil(string topic, string mode, int roundsPerAgent, AgentSetup[] lineup)
     {
         CouncilSession session;
         try
         {
             session = await sessions.StartAsync(
-                Context.ConnectionId, mode, roundsPerAgent, agentNames, Context.ConnectionAborted);
+                Context.ConnectionId, mode, roundsPerAgent, lineup, Context.ConnectionAborted);
         }
         catch (ArgumentException ex)
         {

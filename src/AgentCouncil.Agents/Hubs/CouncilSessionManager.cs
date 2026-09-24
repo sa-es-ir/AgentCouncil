@@ -50,21 +50,30 @@ public sealed class CouncilSessionManager(CouncilAgents agents, CouncilWorkflow 
     private readonly ConcurrentDictionary<string, CouncilSession> _sessions = new();
 
     /// <summary>Opens a fresh session for the connection, replacing any existing one.</summary>
-    /// <param name="agentNames">The invited debaters. Handoff always seats the Moderator.</param>
-    /// <exception cref="ArgumentException">The line-up can't hold a debate.</exception>
+    /// <param name="lineup">The invited debaters and their per-turn tuning. Handoff always seats the Moderator.</param>
+    /// <exception cref="ArgumentException">The line-up can't hold a debate, or names an unknown agent.</exception>
     public async Task<CouncilSession> StartAsync(
-        string connectionId, string mode, int roundsPerAgent, IReadOnlyCollection<string> agentNames, CancellationToken cancellationToken)
+        string connectionId, string mode, int roundsPerAgent, IReadOnlyCollection<AgentSetup> lineup, CancellationToken cancellationToken)
     {
         bool groupChat = string.Equals(mode, GroupChatMode, StringComparison.OrdinalIgnoreCase);
-        List<AIAgent> personas = agents.Personas
-            .Where(a => agentNames.Contains(a.Name!, StringComparer.OrdinalIgnoreCase))
+        AgentSetup? moderatorSetup = lineup.FirstOrDefault(
+            s => string.Equals(s.Name, CouncilAgents.ModeratorName, StringComparison.OrdinalIgnoreCase));
+        bool withModerator = !groupChat || moderatorSetup is not null;
+
+        // Each session gets its own agents, because the token budget and effort are chosen per line-up.
+        List<AIAgent> personas = lineup
+            .Where(s => !string.Equals(s.Name, CouncilAgents.ModeratorName, StringComparison.OrdinalIgnoreCase))
+            .Select(agents.CreateDebater)
             .ToList();
-        bool withModerator = !groupChat || agentNames.Contains(CouncilAgents.ModeratorName, StringComparer.OrdinalIgnoreCase);
 
         if (personas.Count == 0 || personas.Count + (withModerator ? 1 : 0) < 2)
         {
             throw new ArgumentException("Invite at least one persona, and at least two agents in total.");
         }
+
+        AIAgent? moderator = withModerator
+            ? agents.CreateDebater(moderatorSetup ?? new AgentSetup(CouncilAgents.ModeratorName))
+            : null;
 
         await EndAsync(connectionId);
 
@@ -73,13 +82,13 @@ public sealed class CouncilSessionManager(CouncilAgents agents, CouncilWorkflow 
             ? new CouncilSession
             {
                 GroupChatWorkflow = council.BuildGroupChat(
-                    withModerator ? [agents.Moderator, .. personas] : personas, Math.Clamp(roundsPerAgent, 1, 10)),
+                    moderator is null ? personas : [moderator, .. personas], Math.Clamp(roundsPerAgent, 1, 10)),
                 HarnessSession = harnessSession,
             }
             : new CouncilSession
             {
                 HandoffRun = await InProcessExecution.OpenStreamingAsync(
-                    council.BuildHandoff(personas), cancellationToken: cancellationToken),
+                    council.BuildHandoff(moderator!, personas), cancellationToken: cancellationToken),
                 HarnessSession = harnessSession,
             };
 

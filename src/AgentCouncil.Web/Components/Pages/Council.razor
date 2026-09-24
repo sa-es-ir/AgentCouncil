@@ -17,23 +17,61 @@
     @if (!_started && _step == 0)
     {
         <div class="step" @key="0">
-            <div class="roster @(_touched ? "touched" : "")">
-                @foreach (var (m, i) in Members.Values.Where(x => x.Name != "You").Select((x, n) => (x, n)))
+            <div class="table-stage @(_touched ? "touched" : "") @(Benched > 0 ? "has-bench" : "")">
+                <div class="round-table"></div>
+                <div class="table-center">
+                    <span class="table-count">@_selected.Count</span>
+                    <span class="table-label">seated</span>
+                </div>
+                <div class="seat-token you" style="--x:0px; --y:@(TableCy + TableRy)px">
+                    <span class="token-icon">👑</span>
+                    <span class="token-plate">You</span>
+                </div>
+                @foreach (var m in Members.Values.Where(x => x.Name != "You"))
                 {
-                    var on = _selected.Contains(m.Name);
-                    <button type="button" class="roster-card @m.Css @(on ? "selected" : "off")" style="--i:@i"
-                            aria-pressed="@(on ? "true" : "false")"
-                            title="@(on ? $"Send {m.Title} home" : $"Invite {m.Title}")"
+                    var (x, y, seated) = Spot(m.Name);
+                    var t = Tuning(m.Name);
+                    <button @key="m.Name" type="button" class="seat-token @m.Css @(seated ? "seated" : "waiting")"
+                            style="--x:@(F(x))px; --y:@(F(y))px; --gauge:@(F(Gauge(t)))%"
+                            aria-pressed="@(seated ? "true" : "false")"
+                            title="@(seated ? $"Send {m.Title} home" : $"Invite {m.Title} to the table")"
                             @onclick="() => Toggle(m.Name)">
-                        <span class="roster-check" aria-hidden="true">@(on ? "✓" : "+")</span>
-                        <span class="roster-icon" aria-hidden="true">@m.Icon</span>
-                        <span class="roster-name">@m.Title</span>
-                        <span class="roster-role">@m.Role</span>
-                        <span class="roster-blurb">@m.Blurb</span>
-                        <span class="roster-quote">“@m.Quote”</span>
+                        <span class="token-ring" aria-hidden="true"></span>
+                        <span class="token-icon" aria-hidden="true">@m.Icon</span>
+                        <span class="token-plate">@m.Title</span>
+                        <span class="token-budget" aria-hidden="true">@t.MaxOutputTokens @Bolts(t.Effort)</span>
                     </button>
                 }
+                <p class="bench-label @(Benched > 0 ? "" : "empty")">tap to seat them</p>
             </div>
+
+            <div class="tuning @(_selected.Count == 0 ? "hidden" : "")">
+                @foreach (var m in Members.Values.Where(x => _selected.Contains(x.Name)))
+                {
+                    var t = Tuning(m.Name);
+                    <div @key="m.Name" class="tuning-row @m.Css">
+                        <div class="tuning-who">
+                            <span class="tuning-name">@m.Icon @m.Title</span>
+                            <span class="tuning-quote">“@m.Quote”</span>
+                        </div>
+                        <label class="tuning-budget">
+                            <span class="tuning-cap">Token budget <b>@t.MaxOutputTokens</b> <em>· @Shape(t)</em></span>
+                            <input type="range" min="150" max="1500" step="50" value="@t.MaxOutputTokens"
+                                   aria-label="@m.Title token budget per turn"
+                                   @oninput="e => SetBudget(m.Name, e.Value)" />
+                        </label>
+                        <div class="tuning-effort" role="group" aria-label="@m.Title reasoning effort">
+                            @foreach (var (value, label) in Efforts)
+                            {
+                                <button type="button" class="effort-chip @(t.Effort == value ? "on" : "")"
+                                        title="Reasoning effort: @value" @onclick="() => SetEffort(m.Name, value)">@label</button>
+                            }
+                        </div>
+                    </div>
+                }
+                <p class="hint">Budget caps each turn's output tokens and sets how long a turn may be. Effort is only honoured by reasoning deployments; <em>auto</em> sends nothing.</p>
+            </div>
+
             <div class="step-actions">
                 <span class="hint">@PartyHint</span>
                 <button class="btn" disabled="@(!PartyOk)" @onclick="() => _step = 1">Next: pick a topic</button>
@@ -294,7 +332,19 @@
 
     private static MarkupString Render(string text) => (MarkupString)Markdig.Markdown.ToHtml(text, Markdown);
 
-    private readonly HashSet<string> _selected = ["Moderator", "Optimist", "Skeptic", "Pragmatist"];
+    // "auto" sends no reasoning option at all, which is the only safe default on a non-reasoning deployment.
+    private static readonly (string Value, string Label)[] Efforts =
+        [("auto", "auto"), ("low", "⚡"), ("medium", "⚡⚡"), ("high", "⚡⚡⚡")];
+
+    // Round table geometry in px, relative to the stage's top-centre. Matches .round-table in app.css.
+    private const double TableCy = 292;
+    private const double TableRx = 196;
+    private const double TableRy = 94;
+
+    // The table starts empty: the whole company is waiting in the roster row to be seated.
+    private readonly HashSet<string> _selected = [];
+    private readonly Dictionary<string, AgentSetup> _tuning =
+        Members.Keys.ToDictionary(name => name, name => new AgentSetup(name, 400, "auto"));
     private readonly HashSet<string> _seatNames = [];
     private readonly List<TranscriptEntry> _transcript = new();
     private string _topic = string.Empty;
@@ -358,6 +408,58 @@
         }
     }
 
+    private int Benched => Members.Count - 1 - _selected.Count(n => n != "You");
+
+    private AgentSetup Tuning(string name) => _tuning[name];
+
+    private void SetBudget(string name, object? raw)
+    {
+        if (int.TryParse(raw?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var tokens))
+        {
+            _tuning[name] = _tuning[name] with { MaxOutputTokens = tokens };
+        }
+    }
+
+    private void SetEffort(string name, string effort) => _tuning[name] = _tuning[name] with { Effort = effort };
+
+    private static double Gauge(AgentSetup t) => (t.MaxOutputTokens - 150) * 100.0 / (1500 - 150);
+
+    private static string Bolts(string effort) => effort == "auto" ? string.Empty : Efforts.First(e => e.Value == effort).Label;
+
+    // Mirrors the turn-length rule the agent is actually given (AgentSetup.Style on the hub side).
+    private static string Shape(AgentSetup t) => t.MaxOutputTokens switch
+    {
+        <= 250 => "one punchy sentence",
+        <= 700 => "two sentences",
+        _ => "four sentences, with an example",
+    };
+
+    private static string F(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Where a character stands. Uninvited ones queue in the roster row across the top; invited ones
+    /// are spread around the top arc of the table below (its bottom belongs to the user), so inviting
+    /// one sends it walking down to its seat. Both are plain transforms on the same element, so the
+    /// whole company glides whenever the line-up changes.
+    /// </summary>
+    private (double X, double Y, bool Seated) Spot(string name)
+    {
+        var seated = Members.Keys.Where(n => n != "You" && _selected.Contains(n)).ToList();
+        var index = seated.IndexOf(name);
+        if (index >= 0)
+        {
+            // The arc opens up as the table fills: two guests sit together across from you, four spread wide.
+            var arc = Math.Min(210.0, 70.0 * (seated.Count - 1));
+            var degrees = seated.Count == 1 ? 0 : -arc / 2 + (arc * index / (seated.Count - 1));
+            var angle = degrees * Math.PI / 180;
+            return (TableRx * Math.Sin(angle), TableCy - (TableRy * Math.Cos(angle)), true);
+        }
+
+        var bench = Members.Keys.Where(n => n != "You" && !_selected.Contains(n)).ToList();
+        var slot = bench.IndexOf(name);
+        return ((slot - ((bench.Count - 1) / 2.0)) * 112, 52, false);
+    }
+
     private string OrbStyle()
     {
         var seats = Seats.Select(m => m.Name).ToList();
@@ -380,7 +482,8 @@
         _seatNames.UnionWith(invited);
         _seatNames.Add("You");
         BeginTurn(_topic);
-        await Client.StartCouncilAsync(_topic, _groupChat ? "groupchat" : "handoff", _rounds, invited.ToArray());
+        await Client.StartCouncilAsync(
+            _topic, _groupChat ? "groupchat" : "handoff", _rounds, invited.Select(Tuning).ToArray());
     }
 
     private async Task ReplyAsync()

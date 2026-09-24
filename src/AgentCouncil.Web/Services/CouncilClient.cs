@@ -12,6 +12,10 @@ public sealed class TranscriptEntry
 /// <summary>One line of the Pragmatist's todo list (mirrors the hub's TodoView).</summary>
 public sealed record TodoView(string Title, bool Done);
 
+/// <summary>One invited debater and how it is tuned for the session (mirrors the hub's AgentSetup).</summary>
+/// <param name="Effort">"auto" (the model's own default) or a reasoning effort: low, medium, high.</param>
+public sealed record AgentSetup(string Name, int MaxOutputTokens, string Effort);
+
 /// <summary>
 /// Per-circuit SignalR client to the <c>agents</c> service's council hub. Resolves the hub URL
 /// via Aspire service discovery configuration and relays hub callbacks to the UI as events.
@@ -57,9 +61,9 @@ public sealed class CouncilClient(IConfiguration configuration) : IAsyncDisposab
 
     /// <param name="mode">"handoff" or "groupchat".</param>
     /// <param name="roundsPerAgent">Group chat only: how many times each agent speaks per user turn.</param>
-    /// <param name="agentNames">The invited debaters.</param>
-    public Task StartCouncilAsync(string topic, string mode, int roundsPerAgent, string[] agentNames) =>
-        _connection?.InvokeAsync("StartCouncil", topic, mode, roundsPerAgent, agentNames) ?? Task.CompletedTask;
+    /// <param name="lineup">The invited debaters, each with its per-turn token budget and reasoning effort.</param>
+    public Task StartCouncilAsync(string topic, string mode, int roundsPerAgent, AgentSetup[] lineup) =>
+        _connection?.InvokeAsync("StartCouncil", topic, mode, roundsPerAgent, lineup) ?? Task.CompletedTask;
 
     public Task SendUserInputAsync(string text) =>
         _connection?.InvokeAsync("SendUserInput", text) ?? Task.CompletedTask;

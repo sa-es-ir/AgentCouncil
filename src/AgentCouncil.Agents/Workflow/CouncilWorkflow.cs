@@ -1,4 +1,3 @@
-using AgentCouncil.Agents.Agents;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
 
@@ -14,12 +13,12 @@ namespace AgentCouncil.Agents.Workflow;
 /// Group chat: a round-robin manager gives every invited agent the floor in turn. It terminates after each
 /// agent has spoken <c>roundsPerAgent</c> times, which is the "ask the user" moment.
 /// </summary>
-public sealed class CouncilWorkflow(CouncilAgents agents)
+public sealed class CouncilWorkflow
 {
-    public Microsoft.Agents.AI.Workflows.Workflow BuildHandoff(IReadOnlyList<AIAgent> personas) => AgentWorkflowBuilder
-        .CreateHandoffBuilderWith(agents.Moderator)
-        .WithHandoffs(agents.Moderator, personas)
-        .WithHandoffs(personas, agents.Moderator)
+    public Microsoft.Agents.AI.Workflows.Workflow BuildHandoff(AIAgent moderator, IReadOnlyList<AIAgent> personas) => AgentWorkflowBuilder
+        .CreateHandoffBuilderWith(moderator)
+        .WithHandoffs(moderator, personas)
+        .WithHandoffs(personas, moderator)
         // Lets a persona ask the user a follow-up and return to the asking agent.
         .EnableReturnToPrevious()
         .Build();
