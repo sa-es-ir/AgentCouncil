@@ -22,4 +22,9 @@
     <PackageReference Include="Azure.AI.OpenAI" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- SKILL.md files are read at runtime from <content root>/skills; the Web SDK doesn't publish .md on its own. -->
+    <None Include="skills\**" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

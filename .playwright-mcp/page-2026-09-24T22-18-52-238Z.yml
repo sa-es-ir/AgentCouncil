@@ -1,0 +1,30 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: ⚖️
+      - heading "The Agent Council" [active] [level=1] [ref=e6]
+      - paragraph [ref=e7]: Who do you want to talk with?
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic:
+          - generic: "0"
+          - generic: seated
+        - generic [ref=e11]:
+          - generic [ref=e12]: 👑
+          - generic [ref=e13]: You
+        - button "Sir Gavelot" [ref=e14] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e16]: 🛡️
+          - generic [aria-hidden] [ref=e18]: "400"
+        - button "Cap'n Sunny" [ref=e19] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e21]: 🏴‍☠️
+          - generic [aria-hidden] [ref=e23]: "400"
+        - button "Baron von Doubt" [ref=e24] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e26]: 🧐
+          - generic [aria-hidden] [ref=e28]: "400"
+        - button "Master Anvil" [ref=e29] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e31]: 🔨
+          - generic [aria-hidden] [ref=e33]: "400"
+        - paragraph [ref=e34]: tap to seat them
+      - generic [ref=e35]:
+        - generic [ref=e36]: Pick at least one of Cap'n Sunny, Baron von Doubt or Master Anvil.
+        - 'button "Next: pick a topic" [disabled] [ref=e37]'

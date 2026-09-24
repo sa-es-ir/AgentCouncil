@@ -46,12 +46,14 @@ public sealed class CouncilAgents
     public CouncilAgents(
         IChatClient chatClient,
         [FromKeyedServices(AzureOpenAIChatClient.CheapClientKey)] IChatClient cheapClient,
-        IHostEnvironment environment)
+        IHostEnvironment environment,
+        IConfiguration configuration)
     {
         _chatClient = chatClient;
         _cheapClient = cheapClient;
         _skillsRoot = Path.Combine(environment.ContentRootPath, "skills");
-        WorkspaceRoot = Path.Combine(environment.ContentRootPath, "workspace");
+        // The container runs as a non-root user that can't write under /app, so the AppHost points this elsewhere.
+        WorkspaceRoot = configuration["WorkspaceRoot"] ?? Path.Combine(environment.ContentRootPath, "workspace");
         Directory.CreateDirectory(WorkspaceRoot);
 
         // ponytail: one workspace shared by every connection (the agents are singletons); switch to an
