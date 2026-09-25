@@ -34,11 +34,11 @@
                     <button @key="m.Name" type="button" class="seat-token @m.Css @(seated ? "seated" : "waiting")"
                             style="--x:@(F(x))px; --y:@(F(y))px; --gauge:@(F(Gauge(t)))%"
                             aria-pressed="@(seated ? "true" : "false")"
-                            title="@(seated ? $"Send {m.Title} home" : $"Invite {m.Title} to the table")"
+                            title="@(seated ? $"Send the {m.Name} home" : $"Invite the {m.Name} to the table")"
                             @onclick="() => Toggle(m.Name)">
                         <span class="token-ring" aria-hidden="true"></span>
                         <span class="token-icon" aria-hidden="true">@m.Icon</span>
-                        <span class="token-plate">@m.Title</span>
+                        <span class="token-plate">@m.Name</span>
                         <span class="token-budget" aria-hidden="true">@t.MaxOutputTokens @Bolts(t.Effort)</span>
                     </button>
                 }
@@ -51,16 +51,16 @@
                     var t = Tuning(m.Name);
                     <div @key="m.Name" class="tuning-row @m.Css">
                         <div class="tuning-who">
-                            <span class="tuning-name">@m.Icon @m.Title</span>
+                            <span class="tuning-name">@m.Icon @m.Name</span>
                             <span class="tuning-quote">“@m.Quote”</span>
                         </div>
                         <label class="tuning-budget">
                             <span class="tuning-cap">Token budget <b>@t.MaxOutputTokens</b> <em>· @Shape(t)</em></span>
                             <input type="range" min="150" max="1500" step="50" value="@t.MaxOutputTokens"
-                                   aria-label="@m.Title token budget per turn"
+                                   aria-label="@m.Name token budget per turn"
                                    @oninput="e => SetBudget(m.Name, e.Value)" />
                         </label>
-                        <div class="tuning-effort" role="group" aria-label="@m.Title reasoning effort">
+                        <div class="tuning-effort" role="group" aria-label="@m.Name reasoning effort">
                             @foreach (var (value, label) in Efforts)
                             {
                                 <button type="button" class="effort-chip @(t.Effort == value ? "on" : "")"
@@ -109,7 +109,7 @@
             {
                 <label class="rounds-row">
                     Turns per agent
-                    <input type="number" min="1" max="10" @bind="_rounds" class="rounds-input" />
+                    <input type="number" min="1" max="@MaxRounds" @bind="_rounds" class="rounds-input" />
                 </label>
             }
 
@@ -375,6 +375,7 @@
     private bool _busy;
     private bool _awaitingUser;
     private bool _groupChat;
+    private const int MaxRounds = 5;
     private int _rounds = 2;
     private string? _activeAgent;
     private string? _error;
@@ -404,7 +405,7 @@
 
     private string PartyHint => PartyOk
         ? $"{_selected.Count} at the table."
-        : "Pick at least one of Cap'n Sunny, Baron von Doubt or Master Anvil.";
+        : "Pick at least one of the Optimist, Skeptic or Pragmatist.";
 
     private string Subtitle => _started ? "The council is in session."
         : _step == 0 ? "Who do you want to talk with?"
@@ -518,6 +519,7 @@
             topic = $"We are resuming an earlier council session. Its record, workspace file `{_resumeFrom}`, reads:\n\n{record}\n\n{ask}";
         }
 
+        _rounds = Math.Clamp(_rounds, 1, MaxRounds);
         var invited = Invited;
         _started = true;
         _seatNames.Clear();

@@ -252,13 +252,37 @@ html, body {
 }
 
 .seat-token.waiting {
-    opacity: .42;
-    filter: grayscale(.8);
+    opacity: .82;
+    filter: saturate(.75);
 }
 
-.seat-token.waiting:hover { opacity: .8; filter: grayscale(.2); }
+/* Uninvited guests glow in their own colour, one after another, like candles asking to be picked. */
+.seat-token.waiting .token-icon {
+    transform: scale(.88);
+    animation: beckon 3.2s ease-in-out infinite;
+    animation-delay: var(--beckon-delay, 0s);
+}
+.seat-token.optimist { --beckon-delay: .8s; }
+.seat-token.skeptic { --beckon-delay: 1.6s; }
+.seat-token.pragmatist { --beckon-delay: 2.4s; }
+
+.seat-token.waiting:hover, .seat-token.waiting:focus-visible { opacity: 1; filter: none; }
+.seat-token.waiting:hover .token-icon, .seat-token.waiting:focus-visible .token-icon {
+    transform: scale(.96) translateY(-3px);
+    animation: none;
+    border-color: var(--seat-color);
+    box-shadow: 0 0 0 1px var(--seat-color), 0 0 30px 6px color-mix(in srgb, var(--seat-color) 55%, transparent);
+}
 .seat-token.waiting .token-ring, .seat-token.waiting .token-budget { opacity: 0; }
-.seat-token.waiting .token-icon { transform: scale(.88); }
+
+@keyframes beckon {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--seat-color) 0%, transparent); }
+    40% {
+        border-color: var(--seat-color);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--seat-color) 70%, transparent),
+                    0 0 24px 5px color-mix(in srgb, var(--seat-color) 45%, transparent);
+    }
+}
 
 .seat-token.you {
     cursor: default;
@@ -361,6 +385,7 @@ html, body {
     .round-table, .table-center { transition: none; }
     .seat-token { transition: opacity .35s, filter .35s; }
     .table-stage.touched .seat-token.seated .token-icon { animation: none; }
+    .seat-token.waiting .token-icon { animation: none; box-shadow: 0 0 18px 2px color-mix(in srgb, var(--seat-color) 35%, transparent); }
 }
 
 .step-actions {

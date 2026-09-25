@@ -82,7 +82,7 @@ public sealed class CouncilSessionManager(CouncilAgents agents, CouncilWorkflow 
             ? new CouncilSession
             {
                 GroupChatWorkflow = council.BuildGroupChat(
-                    moderator is null ? personas : [moderator, .. personas], Math.Clamp(roundsPerAgent, 1, 10)),
+                    moderator is null ? personas : [moderator, .. personas], Math.Clamp(roundsPerAgent, 1, 5)),
                 HarnessSession = harnessSession,
             }
             : new CouncilSession

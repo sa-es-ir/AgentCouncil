@@ -434,3 +434,6 @@ ai-plans/
 # Files the council's agents write at runtime
 src/AgentCouncil.Agents/workspace/
 .azure
+
+# Playwright MCP screenshots/snapshots
+.playwright-mcp/
