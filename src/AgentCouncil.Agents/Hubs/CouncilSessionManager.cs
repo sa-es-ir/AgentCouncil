@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
+using System.Text;
+using AgentCouncil.Agents.Agents;
 using AgentCouncil.Agents.Workflow;
+using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
 
@@ -12,35 +15,81 @@ namespace AgentCouncil.Agents.Hubs;
 /// user turns (the handoff workflow keeps accepting input on the same run).
 ///
 /// Group chat — the round-robin workflow terminates after the configured number of rounds, so
-/// each user turn opens a fresh run seeded with the accumulated <see cref="History"/>.
+/// each user turn opens a fresh run seeded with the accumulated <see cref="History"/>. (Hosting it as an
+/// agent doesn't help: a second run on the same workflow session starts with no history.)
+///
+/// Alongside the debate, <see cref="HarnessSession"/> is the Pragmatist harness agent's own session.
 /// </summary>
 public sealed class CouncilSession
 {
     public StreamingRun? HandoffRun { get; init; }
+
     public Microsoft.Agents.AI.Workflows.Workflow? GroupChatWorkflow { get; init; }
+
     public List<ChatMessage> History { get; } = [];
 
     public bool IsGroupChat => GroupChatWorkflow is not null;
+
+    /// <summary>Mode, todos, "always approve" rules and background tasks for the harness live here.</summary>
+    public required AgentSession HarnessSession { get; init; }
+
+    /// <summary>Debate transcript the harness agent has not been shown yet.</summary>
+    public StringBuilder UnseenDebate { get; } = new();
+
+    public string? LastSpeaker { get; set; }
+
+    /// <summary>The write the harness is waiting on; <see cref="ToolApprovalAgent"/> surfaces one at a time.</summary>
+    public ToolApprovalRequestContent? PendingApproval { get; set; }
 }
 
 /// <summary>Holds one <see cref="CouncilSession"/> per SignalR connection.</summary>
-public sealed class CouncilSessionManager(CouncilWorkflow council)
+public sealed class CouncilSessionManager(CouncilAgents agents, CouncilWorkflow council)
 {
     public const string GroupChatMode = "groupchat";
 
     private readonly ConcurrentDictionary<string, CouncilSession> _sessions = new();
 
     /// <summary>Opens a fresh session for the connection, replacing any existing one.</summary>
+    /// <param name="lineup">The invited debaters and their per-turn tuning. Handoff always seats the Moderator.</param>
+    /// <exception cref="ArgumentException">The line-up can't hold a debate, or names an unknown agent.</exception>
     public async Task<CouncilSession> StartAsync(
-        string connectionId, string mode, int roundsPerAgent, CancellationToken cancellationToken)
+        string connectionId, string mode, int roundsPerAgent, IReadOnlyCollection<AgentSetup> lineup, CancellationToken cancellationToken)
     {
+        bool groupChat = string.Equals(mode, GroupChatMode, StringComparison.OrdinalIgnoreCase);
+        AgentSetup? moderatorSetup = lineup.FirstOrDefault(
+            s => string.Equals(s.Name, CouncilAgents.ModeratorName, StringComparison.OrdinalIgnoreCase));
+        bool withModerator = !groupChat || moderatorSetup is not null;
+
+        // Each session gets its own agents, because the token budget and effort are chosen per line-up.
+        List<AIAgent> personas = lineup
+            .Where(s => !string.Equals(s.Name, CouncilAgents.ModeratorName, StringComparison.OrdinalIgnoreCase))
+            .Select(agents.CreateDebater)
+            .ToList();
+
+        if (personas.Count == 0 || personas.Count + (withModerator ? 1 : 0) < 2)
+        {
+            throw new ArgumentException("Invite at least one persona, and at least two agents in total.");
+        }
+
+        AIAgent? moderator = withModerator
+            ? agents.CreateDebater(moderatorSetup ?? new AgentSetup(CouncilAgents.ModeratorName))
+            : null;
+
         await EndAsync(connectionId);
 
-        CouncilSession session = string.Equals(mode, GroupChatMode, StringComparison.OrdinalIgnoreCase)
-            ? new CouncilSession { GroupChatWorkflow = council.BuildGroupChat(Math.Clamp(roundsPerAgent, 1, 10)) }
+        AgentSession harnessSession = await agents.Harness.CreateSessionAsync(cancellationToken);
+        CouncilSession session = groupChat
+            ? new CouncilSession
+            {
+                GroupChatWorkflow = council.BuildGroupChat(
+                    moderator is null ? personas : [moderator, .. personas], Math.Clamp(roundsPerAgent, 1, 5)),
+                HarnessSession = harnessSession,
+            }
             : new CouncilSession
             {
-                HandoffRun = await InProcessExecution.OpenStreamingAsync(council.Handoff, cancellationToken: cancellationToken),
+                HandoffRun = await InProcessExecution.OpenStreamingAsync(
+                    council.BuildHandoff(moderator!, personas), cancellationToken: cancellationToken),
+                HarnessSession = harnessSession,
             };
 
         _sessions[connectionId] = session;
@@ -51,7 +100,15 @@ public sealed class CouncilSessionManager(CouncilWorkflow council)
 
     public async Task EndAsync(string connectionId)
     {
-        if (_sessions.TryRemove(connectionId, out CouncilSession? session) && session.HandoffRun is not null)
+        if (!_sessions.TryRemove(connectionId, out CouncilSession? session))
+        {
+            return;
+        }
+
+        // Background tasks keep calling the model after the tab closes unless the session is released.
+        await agents.HarnessBackground.ReleaseSessionAsync(session.HarnessSession, cancelRunning: true);
+
+        if (session.HandoffRun is not null)
         {
             await session.HandoffRun.DisposeAsync();
         }

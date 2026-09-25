@@ -1,0 +1,63 @@
+- main [ref=e2]:
+  - generic [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e40]: ⚖️
+      - heading "The Agent Council" [level=1] [ref=e41]
+      - paragraph [ref=e42]: Who do you want to talk with?
+    - generic [ref=e43]:
+      - generic [ref=e44]:
+        - generic:
+          - generic: "2"
+          - generic: seated
+        - generic [ref=e46]:
+          - generic [ref=e47]: 👑
+          - generic [ref=e48]: You
+        - button "Sir Gavelot" [ref=e49] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e51]: 🛡️
+          - generic [aria-hidden] [ref=e53]: "400"
+        - button "Cap'n Sunny" [pressed] [ref=e54] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e56]: 🏴‍☠️
+          - generic [aria-hidden] [ref=e58]: "400"
+        - button "Baron von Doubt" [active] [pressed] [ref=e59] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e61]: 🧐
+          - generic [aria-hidden] [ref=e63]: "400"
+        - button "Master Anvil" [ref=e64] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e66]: 🔨
+          - generic [aria-hidden] [ref=e68]: "400"
+        - paragraph [ref=e69]: tap to seat them
+      - generic [ref=e73]:
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e76]: 🏴‍☠️ Cap'n Sunny
+            - generic [ref=e77]: “Arr, what could possibly go wrong?”
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - text: Token budget 400
+              - emphasis [ref=e80]: · two sentences
+            - slider "Cap'n Sunny token budget per turn" [ref=e81]: "400"
+          - group "Cap'n Sunny reasoning effort" [ref=e82]:
+            - button "auto" [ref=e83] [cursor=pointer]
+            - button "⚡" [ref=e84] [cursor=pointer]
+            - button "⚡⚡" [ref=e85] [cursor=pointer]
+            - button "⚡⚡⚡" [ref=e86] [cursor=pointer]
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - generic [ref=e91]: 🧐 Baron von Doubt
+            - generic [ref=e92]: “Fascinating. Now show me the receipts.”
+          - generic [ref=e93]:
+            - generic [ref=e94]:
+              - text: Token budget 400
+              - emphasis [ref=e95]: · two sentences
+            - slider "Baron von Doubt token budget per turn" [ref=e96]: "400"
+          - group "Baron von Doubt reasoning effort" [ref=e97]:
+            - button "auto" [ref=e98] [cursor=pointer]
+            - button "⚡" [ref=e99] [cursor=pointer]
+            - button "⚡⚡" [ref=e100] [cursor=pointer]
+            - button "⚡⚡⚡" [ref=e101] [cursor=pointer]
+        - paragraph [ref=e87]:
+          - text: Budget caps each turn's output tokens and sets how long a turn may be. Effort is only honoured by reasoning deployments;
+          - emphasis [ref=e88]: auto
+          - text: sends nothing.
+      - generic [ref=e70]:
+        - generic [ref=e71]: 2 at the table.
+        - 'button "Next: pick a topic" [ref=e72] [cursor=pointer]'

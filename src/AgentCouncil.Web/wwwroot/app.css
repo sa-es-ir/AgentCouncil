@@ -68,31 +68,374 @@ html, body {
 
 .council-header p { color: var(--muted); margin: 0; }
 
-/* ---- Roster (start screen) ---- */
+/* ---- Start stages: pick your company, then the topic ---- */
 
-.roster {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: .75rem;
-    margin: 0 0 1.25rem;
+.council-header .subtitle {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.3rem;
+    font-style: italic;
+    color: var(--text);
 }
 
-.roster-card {
+/* Every stage change (company → topic → session) blurs in; keyed elements replay it. */
+.step, .session, .council-header .subtitle { animation: stage-in .5s cubic-bezier(.2, .8, .2, 1) backwards; }
+
+@keyframes stage-in {
+    from { opacity: 0; transform: translateY(18px); filter: blur(6px); }
+}
+
+/* ---- Stage 1: the round table ----
+   Every character is one absolutely-positioned token whose transform comes from the page
+   (Council.razor's Spot). Inviting someone re-spaces the seats, and because only the transform
+   changes, the whole company glides around the table instead of jumping. */
+
+.table-stage {
+    position: relative;
+    /* --lift pulls the table up over the empty roster row once everyone is seated. */
+    --lift: -134px;
+    height: 344px;
+    margin: 0 0 1.5rem;
+    transition: height .45s cubic-bezier(.2, .8, .2, 1);
+}
+
+.table-stage.has-bench {
+    --lift: 0px;
+    height: 478px;
+}
+
+/* 2 x TableRx by 2 x TableRy, centred on (50%, TableCy): the seats sit on this rim. */
+.round-table {
+    position: absolute;
+    left: 50%;
+    top: 292px;
+    width: 392px;
+    height: 188px;
+    transform: translate(-50%, -50%) translateY(var(--lift));
+    transition: transform .55s cubic-bezier(.2, .8, .2, 1);
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 28%, #2b3142, #171b24 72%);
+    border: 2px solid #363d51;
+    box-shadow: inset 0 0 50px rgba(0, 0, 0, .55), 0 20px 45px rgba(0, 0, 0, .45);
+}
+
+/* A slow glint travelling round the rim, so the table reads as "live" on a projector.
+   The gradient's start angle is animated, not the element: rotating an ellipse would swing
+   the highlight off the rim. */
+@property --sweep {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+}
+
+.round-table::after {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    background: conic-gradient(from var(--sweep), transparent 0 72%, rgba(108, 140, 255, .55) 86%, transparent 100%);
+    mask: radial-gradient(closest-side, transparent 89%, #000 91%);
+    animation: table-sweep 11s linear infinite;
+}
+
+@keyframes table-sweep {
+    to { --sweep: 1turn; }
+}
+
+/* Not the table's centre: it sits in the clear band between the top seat and your crown. */
+.table-center {
+    position: absolute;
+    left: 50%;
+    top: 314px;
+    display: grid;
+    justify-items: center;
+    transform: translate(-50%, -50%) translateY(var(--lift));
+    transition: transform .55s cubic-bezier(.2, .8, .2, 1);
+    pointer-events: none;
+}
+
+.table-count {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 2.6rem;
+    line-height: 1;
+    color: var(--text);
+}
+
+.table-label {
+    font-size: .72rem;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+/* Sits under the roster row; only ever visible while someone is still standing there. */
+.bench-label {
+    position: absolute;
+    left: 50%;
+    top: 124px;
+    margin: 0;
+    transform: translateX(-50%);
+    font-size: .72rem;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    transition: opacity .4s;
+}
+
+.bench-label.empty { opacity: 0; }
+
+.seat-token {
     --seat-color: var(--other);
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 104px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: .25rem;
-    padding: 1rem .5rem .85rem;
-    border-radius: .8rem;
-    background: color-mix(in srgb, var(--seat-color) 6%, var(--panel));
-    border: 1px solid color-mix(in srgb, var(--seat-color) 30%, var(--panel-edge));
-    border-top: 3px solid var(--seat-color);
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    /* -2.15rem = half the head, so --y lands on the face, not the middle of the plate column. */
+    transform: translate(-50%, -2.15rem) translate(var(--x), calc(var(--y) + var(--lift)));
+    transition: transform .75s cubic-bezier(.34, 1.2, .4, 1), opacity .35s, filter .35s;
 }
 
-.roster-icon { font-size: 1.7rem; }
-.roster-name { font-weight: 700; color: var(--seat-color); }
-.roster-role { font-size: .78rem; color: var(--muted); font-style: italic; }
+.token-icon {
+    display: grid;
+    place-items: center;
+    width: 4.3rem;
+    height: 4.3rem;
+    border-radius: 50%;
+    font-size: 2.1rem;
+    background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--seat-color) 26%, #222732), #191d26 72%);
+    border: 2px solid color-mix(in srgb, var(--seat-color) 55%, #2e3546);
+    transition: box-shadow .3s, transform .3s;
+}
+
+/* The token budget, drawn as an arc around the head. */
+.token-ring {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 5.1rem;
+    height: 5.1rem;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: conic-gradient(var(--seat-color) var(--gauge, 0%), color-mix(in srgb, var(--seat-color) 14%, transparent) 0);
+    mask: radial-gradient(closest-side, transparent 80%, #000 82%);
+    transition: background .3s;
+}
+
+.token-plate {
+    padding: .1rem .5rem;
+    border-radius: .4rem;
+    background: color-mix(in srgb, var(--seat-color) 16%, #1b1f28);
+    border: 1px solid color-mix(in srgb, var(--seat-color) 32%, transparent);
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: .82rem;
+    color: var(--seat-color);
+    white-space: nowrap;
+}
+
+.token-budget {
+    font-size: .68rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+}
+
+.seat-token.seated .token-icon {
+    box-shadow: 0 0 0 1px var(--seat-color), 0 10px 26px color-mix(in srgb, var(--seat-color) 28%, transparent);
+}
+
+.seat-token.waiting {
+    opacity: .82;
+    filter: saturate(.75);
+}
+
+/* Uninvited guests glow in their own colour, one after another, like candles asking to be picked. */
+.seat-token.waiting .token-icon {
+    transform: scale(.88);
+    animation: beckon 3.2s ease-in-out infinite;
+    animation-delay: var(--beckon-delay, 0s);
+}
+.seat-token.optimist { --beckon-delay: .8s; }
+.seat-token.skeptic { --beckon-delay: 1.6s; }
+.seat-token.pragmatist { --beckon-delay: 2.4s; }
+
+.seat-token.waiting:hover, .seat-token.waiting:focus-visible { opacity: 1; filter: none; }
+.seat-token.waiting:hover .token-icon, .seat-token.waiting:focus-visible .token-icon {
+    transform: scale(.96) translateY(-3px);
+    animation: none;
+    border-color: var(--seat-color);
+    box-shadow: 0 0 0 1px var(--seat-color), 0 0 30px 6px color-mix(in srgb, var(--seat-color) 55%, transparent);
+}
+.seat-token.waiting .token-ring, .seat-token.waiting .token-budget { opacity: 0; }
+
+@keyframes beckon {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--seat-color) 0%, transparent); }
+    40% {
+        border-color: var(--seat-color);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--seat-color) 70%, transparent),
+                    0 0 24px 5px color-mix(in srgb, var(--seat-color) 45%, transparent);
+    }
+}
+
+.seat-token.you {
+    cursor: default;
+    opacity: .85;
+}
+
+/* Only after the first click, so the opening line-up doesn't hop while the page loads. */
+.table-stage.touched .seat-token.seated .token-icon { animation: hop .6s cubic-bezier(.3, 1.5, .5, 1); }
+
+@keyframes hop {
+    0% { transform: scale(.88) rotate(-8deg); }
+    45% { transform: translateY(-14px) scale(1.12) rotate(8deg); }
+    100% { transform: none; }
+}
+
+.seat-token:focus-visible, .mode-card:focus-visible, .effort-chip:focus-visible,
+.file-list button:focus-visible, .link-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+/* ---- Per-agent tuning: how much each character may spend, and how hard it thinks ---- */
+
+.tuning {
+    display: grid;
+    gap: .5rem;
+    margin: 0 0 1.25rem;
+}
+
+.tuning.hidden { display: none; }
+
+.tuning-row {
+    --seat-color: var(--other);
+    display: grid;
+    grid-template-columns: minmax(170px, 1fr) minmax(210px, 1.3fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: .55rem .85rem;
+    border-radius: .7rem;
+    background: color-mix(in srgb, var(--seat-color) 7%, var(--panel));
+    border: 1px solid color-mix(in srgb, var(--seat-color) 24%, var(--panel-edge));
+    border-left: 3px solid var(--seat-color);
+    animation: stage-in .35s ease backwards;
+}
+
+.tuning-who { display: grid; gap: .1rem; min-width: 0; }
+
+.tuning-name {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 700;
+    color: var(--seat-color);
+}
+
+.tuning-quote {
+    font-size: .78rem;
+    font-style: italic;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tuning-budget { display: grid; gap: .2rem; }
+
+.tuning-cap { font-size: .78rem; color: var(--muted); }
+.tuning-cap b { color: var(--text); font-variant-numeric: tabular-nums; }
+.tuning-cap em { color: var(--seat-color); font-style: normal; }
+
+.tuning-budget input[type="range"] {
+    width: 100%;
+    accent-color: var(--seat-color);
+}
+
+.tuning-effort { display: flex; gap: .25rem; }
+
+.effort-chip {
+    padding: .3rem .55rem;
+    border-radius: .45rem;
+    background: #1b1f28;
+    border: 1px solid var(--panel-edge);
+    color: var(--muted);
+    font: inherit;
+    font-size: .78rem;
+    cursor: pointer;
+    transition: background .2s, color .2s, border-color .2s;
+}
+
+.effort-chip.on {
+    background: color-mix(in srgb, var(--seat-color) 22%, #1b1f28);
+    border-color: var(--seat-color);
+    color: var(--text);
+}
+
+@media (max-width: 820px) {
+    .tuning-row { grid-template-columns: 1fr; gap: .45rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .round-table::after { animation: none; }
+    .round-table, .table-center { transition: none; }
+    .seat-token { transition: opacity .35s, filter .35s; }
+    .table-stage.touched .seat-token.seated .token-icon { animation: none; }
+    .seat-token.waiting .token-icon { animation: none; box-shadow: 0 0 18px 2px color-mix(in srgb, var(--seat-color) 35%, transparent); }
+}
+
+.step-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+/* The chosen company, hopping in above the topic stage. */
+.party {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    margin: 0 0 1.1rem;
+}
+
+.party-member {
+    display: grid;
+    place-items: center;
+    width: 2.9rem;
+    height: 2.9rem;
+    border-radius: 50%;
+    font-size: 1.45rem;
+    background: #222732;
+    border: 2px solid var(--seat-color);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--seat-color) 30%, transparent);
+    animation: hop-in .5s cubic-bezier(.3, 1.5, .5, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 80ms + .15s);
+}
+
+@keyframes hop-in {
+    from { opacity: 0; transform: translateY(-16px) scale(.6); }
+}
+
+.link-btn {
+    margin-left: .4rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-size: .88rem;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
 
 /* ---- Orchestration mode picker ---- */
 
@@ -135,6 +478,8 @@ html, body {
     font-size: .95rem;
 }
 
+.rounds-input.resume-select { width: auto; max-width: 100%; }
+
 .rounds-input {
     width: 4.5rem;
     padding: .45rem .6rem;
@@ -172,6 +517,8 @@ html, body {
 
 .seat {
     --seat-color: var(--muted);
+    animation: deal .5s cubic-bezier(.2, .8, .2, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 90ms + .2s);
     position: relative;
     z-index: 1;
     display: flex;
@@ -179,11 +526,11 @@ html, body {
     gap: .7rem;
 }
 
-.seat.moderator, .msg.moderator, .roster-card.moderator { --seat-color: var(--moderator); }
-.seat.optimist, .msg.optimist, .roster-card.optimist { --seat-color: var(--optimist); }
-.seat.skeptic, .msg.skeptic, .roster-card.skeptic { --seat-color: var(--skeptic); }
-.seat.pragmatist, .msg.pragmatist, .roster-card.pragmatist { --seat-color: var(--pragmatist); }
-.seat.you, .msg.you { --seat-color: var(--you); }
+.seat.moderator, .msg.moderator, .seat-token.moderator, .tuning-row.moderator, .party-member.moderator { --seat-color: var(--moderator); }
+.seat.optimist, .msg.optimist, .seat-token.optimist, .tuning-row.optimist, .party-member.optimist { --seat-color: var(--optimist); }
+.seat.skeptic, .msg.skeptic, .seat-token.skeptic, .tuning-row.skeptic, .party-member.skeptic { --seat-color: var(--skeptic); }
+.seat.pragmatist, .msg.pragmatist, .seat-token.pragmatist, .tuning-row.pragmatist, .party-member.pragmatist { --seat-color: var(--pragmatist); }
+.seat.you, .msg.you, .seat-token.you { --seat-color: var(--you); }
 .msg.other { --seat-color: var(--other); }
 
 .seat-avatar {
@@ -259,6 +606,82 @@ html, body {
 
 .floor-note { font-style: italic; }
 
+.chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+
+.harness-mode.execute { color: var(--pragmatist); border-color: color-mix(in srgb, var(--pragmatist) 45%, #2a2f3a); }
+.researching { color: var(--moderator); border-color: color-mix(in srgb, var(--moderator) 45%, #2a2f3a); }
+
+/* ---- Rail panels: the Pragmatist's todos + the workspace ---- */
+
+.rail-panel {
+    margin-top: .9rem;
+    padding: .75rem .9rem;
+    border-radius: .8rem;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+}
+
+.rail-panel h2 {
+    margin: 0 0 .5rem;
+    font-size: .76rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.rail-panel .hint { margin: 0; font-size: .82rem; }
+
+.todo-list, .file-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    font-size: .86rem;
+}
+
+.todo-list li { overflow-wrap: anywhere; }
+.todo-list li.done { color: var(--muted); text-decoration: line-through; }
+
+.file-list button {
+    width: 100%;
+    text-align: left;
+    padding: .3rem .45rem;
+    border: 1px solid transparent;
+    border-radius: .4rem;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.file-list button:hover { border-color: var(--panel-edge); background: #1d212b; }
+
+.file-list li { display: flex; gap: .2rem; }
+
+.file-list .file-delete { width: auto; flex: none; color: var(--muted); }
+.file-list .file-delete:hover { color: #f87171; }
+
+/* ---- Plan confirmation ---- */
+
+.plan-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .6rem;
+    margin-top: 1rem;
+    padding: .7rem .9rem;
+    border-radius: .6rem;
+    background: var(--panel);
+    border: 1px solid color-mix(in srgb, var(--pragmatist) 45%, #2a2f3a);
+    font-size: .9rem;
+}
+
+.plan-bar .btn { padding: .55rem 1rem; }
+
 /* ---- Topic / reply ---- */
 
 .topic-box, .reply-box {
@@ -290,6 +713,58 @@ html, body {
 }
 
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.secondary { background: #2c3345; }
+.btn.danger { background: #8f3b2d; }
+
+/* ---- Modals: approval gate + file preview ---- */
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(5, 6, 9, .72);
+}
+
+.modal {
+    width: min(560px, 100%);
+    max-height: 85vh;
+    overflow: auto;
+    padding: 1.1rem 1.25rem;
+    border-radius: .9rem;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+    animation: rise .25s ease both;
+}
+
+.modal.wide { width: min(760px, 100%); }
+
+.modal h2 { margin: 0 0 .75rem; font-size: 1.05rem; overflow-wrap: anywhere; }
+
+.modal pre {
+    margin: 0;
+    padding: .7rem .9rem;
+    max-height: 45vh;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: .85rem;
+    background: #0c0e12;
+    border: 1px solid var(--panel-edge);
+    border-radius: .5rem;
+}
+
+.modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: .5rem;
+    margin-top: 1rem;
+}
 
 .hint { color: var(--muted); font-style: italic; }
 
@@ -455,7 +930,11 @@ html, body {
 
 @media (max-width: 760px) {
     .mode-row { flex-direction: column; }
-    .roster { grid-template-columns: repeat(2, 1fr); }
+    /* The table is laid out in px, so shrink the whole stage rather than re-doing the geometry. */
+    .table-stage { transform: scale(.7); transform-origin: top center; height: 241px; }
+    .table-stage.has-bench { height: 335px; }
+    .reply-box { flex-wrap: wrap; }
+    .reply-input { flex-basis: 100%; }
     .msg { max-width: 100%; }
 
     /* Single column: rail sits above the transcript, seats fold into a compact row. */
@@ -471,7 +950,8 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
     .orb { transition: opacity .3s; }
     .seat.active .seat-avatar { animation: none; transform: none; }
-    .msg { animation: none; }
+    .msg, .modal { animation: none; }
+    .step, .session, .council-header .subtitle, .seat, .party-member, .tuning-row { animation: none; }
     .msg.streaming .text::after { animation: none; }
     .thinking .dot { animation: none; }
 }

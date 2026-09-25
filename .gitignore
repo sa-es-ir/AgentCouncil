@@ -429,3 +429,11 @@ FodyWeavers.xsd
 *.msp
 
 ai-plans/
+.csmesh/
+
+# Files the council's agents write at runtime
+src/AgentCouncil.Agents/workspace/
+.azure
+
+# Playwright MCP screenshots/snapshots
+.playwright-mcp/
