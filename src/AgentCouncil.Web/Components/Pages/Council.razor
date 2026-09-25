@@ -92,7 +92,7 @@
             <div class="mode-row">
                 <button type="button" class="mode-card @(!_groupChat ? "selected" : "")" @onclick="() => _groupChat = false">
                     <span class="mode-name">🤝 Handoff</span>
-                    <span class="mode-desc">Sir Gavelot decides who speaks next and when to ask you.</span>
+                    <span class="mode-desc">Moderator decides who speaks next and when to ask you.</span>
                 </button>
                 <button type="button" class="mode-card @(_groupChat ? "selected" : "")" @onclick="() => _groupChat = true">
                     <span class="mode-name">🔄 Group chat</span>
@@ -102,7 +102,7 @@
 
             @if (!_groupChat && !_selected.Contains("Moderator"))
             {
-                <p class="hint">Sir Gavelot joins to chair the handoff.</p>
+                <p class="hint">Moderator joins to chair the handoff.</p>
             }
 
             @if (_groupChat)
@@ -330,7 +330,7 @@
     // Order matters: seat positions on the stage (and the orb math) follow this order.
     private static readonly Dictionary<string, Member> Members = new()
     {
-        ["Moderator"] = new("Moderator", "🛡️", "Sir Gavelot", "the Moderator", "moderator",
+        ["Moderator"] = new("Moderator", "🛡️", "Moderator", "the Moderator", "moderator",
             "Keeps the round table civil. Mostly.", "Order! One knight at a time."),
         ["Optimist"] = new("Optimist", "🏴‍☠️", "Cap'n Sunny", "the Optimist", "optimist",
             "Sees buried treasure in every storm.", "Arr, what could possibly go wrong?"),

@@ -39,6 +39,13 @@ public sealed class CouncilAgents
     public const string PragmatistName = "Pragmatist";
     public const string ResearcherName = "Researcher";
 
+    // The characters the Blazor UI shows (Council.razor, Members). Names stay the hub keys; this only
+    // teaches the agents who's who, so they address each other in character instead of by role.
+    private const string Cast =
+        "The council's characters: Moderator, Cap'n Sunny (the Optimist), "
+        + "Baron von Doubt (the Skeptic), Master Anvil (the Pragmatist). The user is Your Majesty. "
+        + "Speak as your character and always call everyone by these names, never by role.";
+
     private readonly IChatClient _chatClient;
     private readonly IChatClient _cheapClient;
     private readonly string _skillsRoot;
@@ -102,7 +109,7 @@ public sealed class CouncilAgents
                       you wrote.
                     If the user denies a write, do not retry it; ask what to change. Keep chat replies to
                     1-2 sentences; the files carry the detail.
-                    """,
+                    """ + "\n" + Cast,
             },
             AIContextProviders =
             [
@@ -196,7 +203,7 @@ public sealed class CouncilAgents
             {
                 // The budget is enforced twice: as a prompt rule (so the turn *ends*) and as a hard cap
                 // (so a runaway turn is truncated rather than billed).
-                Instructions = $"{persona}\nTurn length: {setup.Style}. Never exceed {setup.MaxOutputTokens} output tokens.",
+                Instructions = $"{persona}\n{Cast}\nTurn length: {setup.Style}. Never exceed {setup.MaxOutputTokens} output tokens.",
                 MaxOutputTokens = setup.MaxOutputTokens,
                 Reasoning = Enum.TryParse(setup.Effort, ignoreCase: true, out ReasoningEffort effort)
                     ? new ReasoningOptions { Effort = effort }

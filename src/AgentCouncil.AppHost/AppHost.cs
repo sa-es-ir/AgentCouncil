@@ -19,11 +19,21 @@ if (builder.ExecutionContext.IsPublishMode)
     agents.WithEnvironment("WorkspaceRoot", "/tmp/workspace");
 }
 
+// Custom domain, bound once by hand (Cloudflare CNAME, grey cloud, + asuid TXT); declared here so azd deploy keeps it.
+var webDomain = builder.AddParameter("webDomain", "agents.codesimple.dev", publishValueAsDefault: true);
+var webCertificate = builder.AddParameter("webCertificate", "mc-envf6hs6nry5p4-agents-codesimpl-9626", publishValueAsDefault: true);
+
 builder.AddProject<Projects.AgentCouncil_Web>("web")
     .WithReference(agents)
     .WaitFor(agents)
     .WithExternalHttpEndpoints()
-    .PublishAsAzureContainerApp(SingleReplica);
+    .PublishAsAzureContainerApp((infra, app) =>
+    {
+        SingleReplica(infra, app);
+#pragma warning disable ASPIREACADOMAINS001 // experimental API
+        app.ConfigureCustomDomain(webDomain, webCertificate);
+#pragma warning restore ASPIREACADOMAINS001
+    });
 
 builder.Build().Run();
 
