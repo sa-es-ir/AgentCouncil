@@ -1,10 +1,42 @@
 # .NET Conf Session Proposal
 
+## ✅ Final submission (copy-paste)
+
+**Title:** From Debate to Done: Multi-Agent Apps That Argue, Plan, and Ask Permission in .NET
+
+**Level:** Intermediate (300) · **Format:** Talk + live demo · **Try it:** https://agents.codesimple.dev
+
+### Abstract
+
+Most agent demos stop at conversation. This one keeps going, and you can try it yourself at **agents.codesimple.dev**.
+
+**Argue.** Invite a panel of AI characters (a Moderator, an Optimist, a Skeptic and a Pragmatist) to a round table and give them a topic. Pick who sits down, tune each one's token budget and reasoning effort, and watch them debate live in Blazor, either as a **handoff** or a **round-robin group chat** built on **Microsoft Agent Framework**. Jump in whenever you want to steer.
+
+**Plan.** When the talking stops, the Pragmatist turns the debate into a todo list. You confirm the plan, it switches to execute mode and sends a background Researcher to dig up facts.
+
+**Ask permission.** Every file write waits behind a **human approval gate**. We'll build it, show where it still breaks inside workflows today, and walk through the workaround.
+
+Along the way: the **DevUI** debugger, OpenTelemetry traces and per-model token cost in the **.NET Aspire** dashboard, agent skills, context compaction, and shipping the whole thing to **Azure Container Apps** with a custom domain using `azd up`. It's real, running code.
+
+### Short version (~60 words)
+
+Four AI agents debate your topic, one turns the result into a plan, then it acts, but only with your approval. Built with Microsoft Agent Framework and .NET Aspire and running live at agents.codesimple.dev: handoff and group-chat orchestration, a tool-using harness agent, human-in-the-loop approvals, DevUI, OpenTelemetry, and a one-command deploy to Azure Container Apps.
+
+### Key takeaways
+
+- How to pick between handoff and group-chat orchestration in Agent Framework
+- How to move an agent from talking to acting safely: plan/execute modes, todos, approval gates
+- Where human-in-the-loop approvals break down today, and a workaround that ships
+- How to observe agents and control cost with DevUI, Aspire, OpenTelemetry and cheaper model routing
+- How to take an Aspire agent app from `dotnet run` to a custom domain on Azure Container Apps
+
+---
+
 ## Title options
 
 1. **Assemble the Council: Multi-Agent Orchestration with Microsoft Agent Framework and .NET Aspire**
 2. **Four Agents Walk into a Debate: Handoff, Group Chat, and Human-in-the-Loop in .NET**
-3. **From Talk to Action: Building Agents That Debate, Plan, and Ask Permission** ⭐ chosen
+3. **From Talk to Action: Building Agents That Debate, Plan, and Ask Permission** (earlier pick, superseded by the final title above)
 4. **Agents at the Round Table: A Practical Tour of Microsoft Agent Framework**
 5. **Let Them Argue, Then Let One Act: Multi-Agent Apps in .NET**
 
