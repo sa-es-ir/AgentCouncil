@@ -437,3 +437,4 @@ src/AgentCouncil.Agents/workspace/
 
 # Playwright MCP screenshots/snapshots
 .playwright-mcp/
+slides/
