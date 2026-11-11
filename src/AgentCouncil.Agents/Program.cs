@@ -36,9 +36,10 @@ if (builder.Environment.IsDevelopment())
 
     // Surface each council agent in the DevUI sidebar (reusing the same instances as the workflow).
     builder.AddAIAgent(CouncilAgents.ModeratorName, (sp, _) => sp.GetRequiredService<CouncilAgents>().Moderator);
-    builder.AddAIAgent(CouncilAgents.OptimistName, (sp, _) => sp.GetRequiredService<CouncilAgents>().Optimist);
+    builder.AddAIAgent(CouncilAgents.OptimisticName, (sp, _) => sp.GetRequiredService<CouncilAgents>().Optimistic);
     builder.AddAIAgent(CouncilAgents.SkepticName, (sp, _) => sp.GetRequiredService<CouncilAgents>().Skeptic);
-    builder.AddAIAgent(CouncilAgents.PragmatistName, (sp, _) => sp.GetRequiredService<CouncilAgents>().Pragmatist);
+    builder.AddAIAgent(CouncilAgents.PragmaticName, (sp, _) => sp.GetRequiredService<CouncilAgents>().Pragmatic);
+    builder.AddAIAgent(CouncilAgents.PessimisticName, (sp, _) => sp.GetRequiredService<CouncilAgents>().Pessimistic);
 }
 
 var app = builder.Build();

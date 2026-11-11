@@ -12,20 +12,24 @@ Built on the **Microsoft Agent Framework** (.NET) and **.NET Aspire**, backed by
 
 |     | Agent          | What they do                                                       |
 | --- | -------------- | ------------------------------------------------------------------ |
-| 🛡️  | **Moderator**  | Keeps the debate on track and passes the floor                     |
-| 🏴‍☠️  | **Optimist**   | Sees the upside in everything                                      |
-| 🧐  | **Skeptic**    | Pokes holes, and can read the files the council has written        |
-| 🔨  | **Pragmatist** | Turns talk into a plan, then into files, with a Researcher on call |
+| 🛡️  | **Moderator**   | Keeps the debate on track and passes the floor                     |
+| ☀️  | **Optimistic**  | Sees the upside in everything                                      |
+| 🧐  | **Skeptic**     | Pokes holes, and can read the files the council has written        |
+| 🔨  | **Pragmatic**   | Turns talk into a plan, then into files, with a Researcher on call |
+| 🌧️  | **Pessimistic** | Complains about everything and jokes at everyone else's expense    |
+
+Each agent opens its turn by reacting to whoever spoke before it, by name ("Good one, Skeptic, but…"), so the debate reads like a conversation rather than a stack of reports.
 
 ## What you can do
 
 - **Choose who sits at the table.** Invite any mix (at least two agents, one of them a persona).
 - **Tune each agent.** A slider sets how long their turns are (150–1500 output tokens), and effort chips (`auto` / ⚡ / ⚡⚡ / ⚡⚡⚡) set reasoning depth.
 - **Pick how they talk:**
-  - **Handoff**: the Moderator decides who speaks next, and agents can hand the floor to each other.
+  - **Handoff**: agents pass the floor to each other by name; the Moderator decides when to ask you.
   - **Group chat**: strict round-robin, for a set number of turns per agent.
+  - **Magentic One**: the Moderator plans the debate, calls on each speaker with an instruction, then gives a verdict.
 - **Jump in anytime.** When they finish a round, the floor comes back to you.
-- **Make it real.** Press the **🔨 act** button to hand it to the Pragmatist. It proposes todos (_plan_ mode), you confirm, and it executes: writing files to a shared workspace. Every write waits for **Approve / Always approve / Deny**.
+- **Make it real.** Press the **🔨 act** button to hand it to Pragmatic. It proposes todos (_plan_ mode), you confirm, and it executes: writing files to a shared workspace. Every write waits for **Approve / Always approve / Deny**. During the debate you can also just ask Pragmatic to write something down; that approval comes straight out of the workflow.
 - **Pick up where you left off.** Start a new council from any `.md` file in the workspace (e.g. a previous `decision-record.md`).
 - **Watch it think.** Every agent turn and LLM call is traced in the Aspire dashboard, and the Agent Framework **DevUI** lets you talk to each agent directly.
 
@@ -56,7 +60,7 @@ dotnet user-secrets --project src/AgentCouncil.AppHost set "ConnectionStrings:op
 | ----------------- | -------- | ---------------------------------------------------------------------------------------------- |
 | `Endpoint`        | ✅       | Your Azure OpenAI resource URL                                                                 |
 | `Key`             | ✅       | The resource's API key                                                                         |
-| `Deployment`      | ✅       | Moderator and the Pragmatist (the harness)                                                     |
+| `Deployment`      | ✅       | Moderator and Pragmatic (the harness)                                                     |
 | `CheapDeployment` | optional | The personas, the Researcher and conversation summaries. Falls back to `Deployment` if omitted |
 
 > 💡 Using a smaller model for `CheapDeployment` (e.g. a _mini_ model) cuts cost a lot, since the personas do most of the talking.
@@ -71,10 +75,10 @@ The console prints the **Aspire dashboard** URL. Open it, wait until `agents` an
 
 ## A first session
 
-1. **Invite** the Optimist, the Skeptic and the Pragmatist. Watch them walk to the table.
-2. Choose **Handoff** (the Moderator is seated automatically) or **Group chat**.
+1. **Invite** Optimistic, Skeptic, Pragmatic and Pessimistic. Watch them walk to the table.
+2. Choose **Handoff** or **Magentic One** (the Moderator is seated automatically), or **Group chat**.
 3. Drop a topic, e.g. _"Should we adopt a 4-day work week?"_, and let them debate.
-4. When the floor returns to you, reply to steer the debate, or press the Pragmatist's **🔨 act** button with an instruction like _"write a decision record"_.
+4. When the floor returns to you, reply to steer the debate, or press **🔨 Pragmatic, act** with an instruction like _"write a decision record"_.
 5. Review the proposed todos and hit **Confirm plan**.
 6. **Approve** the first file write, then choose **Always approve** for the rest.
 7. `decision-record.md` appears in the workspace pane. Click it to preview.
@@ -88,7 +92,7 @@ While running in Development, the `agents` service hosts the Agent Framework deb
 https://localhost:<agents-port>/devui
 ```
 
-All four debaters are listed there. Chat with one directly and inspect its turns and traces. The full handoff graph is also available as Mermaid at `/council/graph`.
+All five debaters are listed there. Chat with one directly and inspect its turns and traces. The full handoff graph is also available as Mermaid at `/council/graph`.
 
 ## Deploying to Azure
 
@@ -134,5 +138,5 @@ dotnet test  AgentCouncil.slnx
 ## Learn more
 
 - [docs/AGENT-FRAMEWORK.md](docs/AGENT-FRAMEWORK.md): how the debaters and workflows are built
-- [docs/AGENT-HARNESS.md](docs/AGENT-HARNESS.md): how the Pragmatist plans, loops, and asks for approval
+- [docs/AGENT-HARNESS.md](docs/AGENT-HARNESS.md): how Pragmatic plans, loops, and asks for approval
 - [CLAUDE.md](CLAUDE.md): architecture details and known gotchas for contributors

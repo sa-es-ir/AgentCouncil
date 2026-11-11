@@ -5,18 +5,17 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Microsoft Agent Framework (core GA; Hosting + DevUI are prerelease) -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.19.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.19.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.19.0-preview.260822.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.19.0-preview.260822.1" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.27.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.27.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.27.0-preview.261030.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.27.0-preview.261030.1" />
     <!-- LLM client stack -->
-    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.9.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.9.0" />
-    <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.1" />
     <!-- SignalR client + markdown rendering for the Blazor front-end -->
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
     <PackageVersion Include="Markdig" Version="0.41.3" />
-    <PackageVersion Include="MessagePack" Version="3.1.7" />
+    <PackageVersion Include="MessagePack" Version="3.1.12" />
     <PackageVersion Include="Aspire.Hosting.Azure.AppContainers" Version="13.2.4" />
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.6" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />

@@ -21,30 +21,39 @@ public sealed record AgentSetup(string Name, int MaxOutputTokens = 400, string E
 }
 
 /// <summary>
-/// Builds and holds the council agents. The four debaters exist twice over: as singletons for DevUI,
+/// Builds and holds the council agents. The five debaters exist twice over: as singletons for DevUI,
 /// and as per-session clones built by <see cref="CreateDebater"/> with the line-up's chosen token
-/// budget and reasoning effort. Every piece of per-conversation state (history, mode, todos, approval
-/// rules, background tasks) lives in an <see cref="AgentSession"/>, never on the agent.
+/// budget, reasoning effort and seating. Every piece of per-conversation state (history, mode, todos,
+/// approval rules, background tasks) lives in an <see cref="AgentSession"/>, never on the agent.
 ///
-/// <see cref="Harness"/> is the Pragmatist "with hands": a standalone agent the hub runs on its own
-/// session, because tool approvals cannot round-trip through a workflow in Agent Framework 1.19
-/// (see ai-plans/option-b-implementation-phases.md, Phase 1 fallback).
+/// <see cref="Harness"/> is the Pragmatic "with hands": a standalone agent with plan/execute modes, a
+/// todo loop and a background Researcher, which the hub runs on its own session. Since 1.27, tool
+/// approvals also round-trip through the debate workflows, so the in-debate Pragmatic can write a file
+/// on request too (the hub answers the workflow's <c>RequestInfoEvent</c>).
 /// </summary>
 public sealed class CouncilAgents
 {
     // Agent names are used as DevUI identifiers and as the labels the Blazor UI shows per turn.
     public const string ModeratorName = "Moderator";
-    public const string OptimistName = "Optimist";
+    public const string OptimisticName = "Optimistic";
     public const string SkepticName = "Skeptic";
-    public const string PragmatistName = "Pragmatist";
+    public const string PragmaticName = "Pragmatic";
+    public const string PessimisticName = "Pessimistic";
     public const string ResearcherName = "Researcher";
 
-    // The characters the Blazor UI shows (Council.razor, Members). Names stay the hub keys; this only
-    // teaches the agents who's who, so they address each other in character instead of by role.
-    private const string Cast =
-        "The council's characters: Moderator, Cap'n Sunny (the Optimist), "
-        + "Baron von Doubt (the Skeptic), Master Anvil (the Pragmatist). The user is Your Majesty. "
-        + "Speak as your character and always call everyone by these names, never by role.";
+    /// <summary>Every debater, Moderator first (the handoff start agent).</summary>
+    public static readonly string[] DebaterNames = [ModeratorName, OptimisticName, SkepticName, PragmaticName, PessimisticName];
+
+    // What makes the debate sound like people talking rather than a panel of reports.
+    private const string Conversation =
+        """
+        This is a live, spoken conversation, not a report. Look at who spoke just before you and react to
+        them by name first: agree, tease or push back ("Good one, Skeptic, but...", "Oh, come on,
+        Optimistic..."). When that was Your Majesty, answer Your Majesty directly and do what they asked.
+        Sound like a person in a lively meeting: use contractions, no bullet points, no headings, and
+        never announce your own role. When a fact, figure or recent event would settle a point, you may
+        search the web first; never search for opinions.
+        """;
 
     private readonly IChatClient _chatClient;
     private readonly IChatClient _cheapClient;
@@ -68,9 +77,10 @@ public sealed class CouncilAgents
         Store = new FileSystemAgentFileStore(WorkspaceRoot);
 
         Moderator = CreateDebater(new AgentSetup(ModeratorName));
-        Optimist = CreateDebater(new AgentSetup(OptimistName));
+        Optimistic = CreateDebater(new AgentSetup(OptimisticName));
         Skeptic = CreateDebater(new AgentSetup(SkepticName));
-        Pragmatist = CreateDebater(new AgentSetup(PragmatistName));
+        Pragmatic = CreateDebater(new AgentSetup(PragmaticName));
+        Pessimistic = CreateDebater(new AgentSetup(PessimisticName));
 
         HarnessTodos = new TodoProvider();
         HarnessModes = new AgentModeProvider();
@@ -80,23 +90,30 @@ public sealed class CouncilAgents
                     cheapClient,
                     instructions:
                         """
-                        You are the council's Researcher. Answer the question you are given with at most
-                        3 concise bullet points of facts, precedents or figures, flagging anything uncertain.
+                        You are the council's Researcher. Search the web, then answer the question you are
+                        given with at most 3 concise bullet points of facts, precedents or figures, citing
+                        sources and flagging anything uncertain.
                         """,
                     name: ResearcherName,
-                    description: "Gathers facts, precedents and figures on a focused question."),
+                    description: "Gathers facts, precedents and figures on a focused question.",
+                    tools: [new HostedWebSearchTool()]),
             ],
             new BackgroundAgentsProviderOptions());
 
-        AIAgent pragmatistWithHands = new ChatClientAgent(chatClient, new ChatClientAgentOptions
+        // Compaction sits on the harness's chat client, beneath function invocation, so it compacts per
+        // service call. On the agent (AIContextProviders) it still breaks approvals in 1.27 together with
+        // TodoProvider: the approved call never runs and the model replays its last tool calls.
+        IChatClient harnessClient = chatClient.AsBuilder().UseAIContextProviders(Compaction(cheapClient)).Build();
+
+        AIAgent pragmaticWithHands = new ChatClientAgent(harnessClient, new ChatClientAgentOptions
         {
-            Name = PragmatistName,
+            Name = PragmaticName,
             Description = "Turns the council's debate into files in the shared workspace.",
             ChatOptions = new()
             {
                 Instructions =
                     """
-                    You are the Pragmatist, and you act for the council: you turn its debate into files in
+                    You are Pragmatic, and you act for the council: you turn its debate into files in
                     the shared workspace.
                     - In plan mode: propose a short todo list with todos_add (2-4 items, each producing or
                       updating one file), then ask the user in one sentence to confirm. Never write files
@@ -109,7 +126,7 @@ public sealed class CouncilAgents
                       you wrote.
                     If the user denies a write, do not retry it; ask what to change. Keep chat replies to
                     1-2 sentences; the files carry the detail.
-                    """ + "\n" + Cast,
+                    """ + "\n" + Cast(DebaterNames),
             },
             AIContextProviders =
             [
@@ -118,9 +135,6 @@ public sealed class CouncilAgents
                 HarnessTodos,
                 HarnessModes,
                 HarnessBackground,
-
-                // No CompactionProvider here: combined with TodoProvider it breaks approval matching in 1.19 —
-                // the approved call never runs and the model replays its last tool call.
             ],
         });
 
@@ -128,25 +142,24 @@ public sealed class CouncilAgents
         // the session), and the loop wraps that — it keeps re-invoking while execute-mode todos remain and
         // stops as soon as an iteration surfaces a pending approval.
         Harness = new LoopAgent(
-            new AIAgentBuilder(pragmatistWithHands).UseToolApproval().Build(),
+            new AIAgentBuilder(pragmaticWithHands).UseToolApproval().Build(),
             new TodoCompletionLoopEvaluator(new TodoCompletionLoopEvaluatorOptions { Modes = ["execute"] }),
             new LoopAgentOptions { MaxIterations = 12, ExcludeOnBehalfOfMessages = true });
     }
 
     public AIAgent Moderator { get; }
 
-    public AIAgent Optimist { get; }
+    public AIAgent Optimistic { get; }
 
     public AIAgent Skeptic { get; }
 
-    public AIAgent Pragmatist { get; }
+    public AIAgent Pragmatic { get; }
 
-    /// <summary>All debaters, with the Moderator first (the handoff start agent).</summary>
-    public IReadOnlyList<AIAgent> All => [Moderator, Optimist, Skeptic, Pragmatist];
+    public AIAgent Pessimistic { get; }
 
-    public IReadOnlyList<AIAgent> Personas => [Optimist, Skeptic, Pragmatist];
+    public IReadOnlyList<AIAgent> Personas => [Optimistic, Skeptic, Pragmatic, Pessimistic];
 
-    /// <summary>The Pragmatist with file tools, plan/execute modes, todos, a Researcher, approvals and a todo loop.</summary>
+    /// <summary>Pragmatic with file tools, plan/execute modes, todos, a Researcher, approvals and a todo loop.</summary>
     public AIAgent Harness { get; }
 
     public TodoProvider HarnessTodos { get; }
@@ -160,39 +173,94 @@ public sealed class CouncilAgents
     public AgentFileStore Store { get; }
 
     /// <summary>Builds one debater tuned for a session. Agents are stateless, so a fresh one per session is free.</summary>
+    /// <param name="seated">Who is at the table, so the agent only addresses members who are there. Defaults to everyone.</param>
+    /// <param name="canHandOff">Handoff mode: the agent passes the floor itself, so it is told whom to hand off to.</param>
     /// <exception cref="ArgumentException"><paramref name="setup"/> names an agent that isn't on the council.</exception>
-    public AIAgent CreateDebater(AgentSetup setup)
+    public AIAgent CreateDebater(AgentSetup setup, IReadOnlyCollection<string>? seated = null, bool canHandOff = true)
     {
+        // Personas pass the floor around the table; the Moderator calls on people and hands back to the user.
+        string handOff = !canHandOff ? string.Empty
+            : setup.Name == ModeratorName
+                ? """
+                  Call on one member by name and call the handoff tool for them. When the floor comes back
+                  to you after a few voices have been heard, sum up the clash in one line and ask Your
+                  Majesty one focused question, without handing off.
+                  """
+                : """
+                  Finish every turn by calling a handoff tool: pass the floor to the member you just named,
+                  or to the Moderator once a point has gone back and forth a couple of times. Naming someone
+                  without calling the handoff tool leaves them silent. Never hand straight back to whoever
+                  just handed to you.
+                  """;
+
         (IChatClient client, string description, string persona) = setup.Name switch
         {
             ModeratorName => (_chatClient,
-                "Opens and orchestrates the council debate and decides when to ask the user for input.",
+                "Chairs the council debate and decides when to ask the user for input.",
                 """
-                You are the Moderator of a council debating the user's topic. Frame or sharpen the debate,
-                then hand the floor to one of the personas you can hand off to; once a few distinct angles
-                have been heard, instead ask the user one focused question.
+                You are the Moderator of a council debating Your Majesty's topic. Frame or sharpen the
+                debate and keep it moving between the members, always by name.
                 """),
-            OptimistName => (_cheapClient,
+            OptimisticName => (_cheapClient,
                 "Argues the upside, opportunities and benefits.",
                 """
-                You are the Optimist on the council: argue the upside with concrete, specific benefits,
-                engaging the Skeptic's latest point head-on. Then hand the floor back to the Moderator.
+                You are Optimistic on the council: argue the upside with concrete, specific benefits, and
+                take on the gloomiest point just made head-on.
                 """),
             SkepticName => (_cheapClient,
                 "Surfaces risks and counter-arguments.",
                 """
-                You are the Skeptic on the council: surface the sharpest risk, hidden cost, or failure
-                mode, countering the Optimist with specifics, not vague doubt. When a workspace file such
-                as decision-record.md has been written or mentioned, grep or read it first and rebut its
-                weakest specific line. Then hand the floor back to the Moderator.
+                You are Skeptic on the council: surface the sharpest risk, hidden cost or failure mode,
+                with specifics, not vague doubt. When a workspace file such as decision-record.md has been
+                written or mentioned, grep or read it first and rebut its weakest specific line.
                 """),
-            PragmatistName => (_cheapClient,
-                "Grounds the debate in trade-offs and next steps.",
+            PragmaticName => (_cheapClient,
+                "Grounds the debate in trade-offs and next steps, and writes things down when asked.",
                 """
-                You are the Pragmatist on the council: weigh the trade-off on the table and propose one
-                concrete, realistic next step. Then hand the floor back to the Moderator.
+                You are Pragmatic on the council: weigh the trade-off on the table and propose one
+                concrete, realistic next step. When Your Majesty asks you to write something down, write it
+                right away with file_access_write, without asking anyone first (Your Majesty approves every
+                write). Never write files unasked.
+                """),
+            PessimisticName => (_cheapClient,
+                "Complains about everything and jokes at everyone else's expense.",
+                """
+                You are Pessimistic on the council: you complain about everything (the topic, the meeting,
+                the coffee) and make dry jokes at the others' expense, especially Optimistic's sunshine
+                and Pragmatic's spreadsheets. Never cruel, always funny, and slip in one genuine worry.
                 """),
             _ => throw new ArgumentException($"'{setup.Name}' is not a council debater.", nameof(setup)),
+        };
+
+        AIContextProvider[] capabilities = setup.Name switch
+        {
+            SkepticName =>
+            [
+                // Read-only: the Skeptic can grep what Pragmatic wrote, never change it.
+                new FileAccessProvider(Store, new FileAccessProviderOptions
+                {
+                    DisableWriteTools = true,
+                    DisableReadOnlyToolApproval = true,
+                }),
+
+                // SKILL.md files under skills/ become capabilities with no code change.
+                new AgentSkillsProvider(
+                    _skillsRoot,
+                    options: new AgentSkillsProviderOptions
+                    {
+                        DisableLoadSkillApproval = true,
+                        DisableReadSkillResourceApproval = true,
+                    }),
+                Compaction(_cheapClient),
+            ],
+
+            // Writes need approval, which surfaces from the workflow as a RequestInfoEvent (fixed in 1.27).
+            PragmaticName =>
+            [
+                new FileAccessProvider(Store, new FileAccessProviderOptions { DisableReadOnlyToolApproval = true }),
+                Compaction(_cheapClient),
+            ],
+            _ => [Compaction(_cheapClient)],
         };
 
         return new ChatClientAgent(client, new ChatClientAgentOptions
@@ -203,42 +271,54 @@ public sealed class CouncilAgents
             {
                 // The budget is enforced twice: as a prompt rule (so the turn *ends*) and as a hard cap
                 // (so a runaway turn is truncated rather than billed).
-                Instructions = $"{persona}\n{Cast}\nTurn length: {setup.Style}. Never exceed {setup.MaxOutputTokens} output tokens.",
+                Instructions =
+                    $"{persona}\n{Conversation}\n{handOff}\n{Cast(seated ?? DebaterNames)}\n"
+                    + $"Turn length: {setup.Style}. Never exceed {setup.MaxOutputTokens} output tokens.",
                 MaxOutputTokens = setup.MaxOutputTokens,
-                Reasoning = Enum.TryParse(setup.Effort, ignoreCase: true, out ReasoningEffort effort)
-                    ? new ReasoningOptions { Effort = effort }
-                    : null,
-            },
-            AIContextProviders = setup.Name == SkepticName
-                ?
-                [
-                    // Read-only: the Skeptic can grep what the Pragmatist wrote, never change it. No approval
-                    // needed, which matters because approvals cannot surface from inside the workflow.
-                    new FileAccessProvider(Store, new FileAccessProviderOptions
-                    {
-                        DisableWriteTools = true,
-                        DisableReadOnlyToolApproval = true,
-                    }),
 
-                    // SKILL.md files under skills/ become capabilities with no code change.
-                    new AgentSkillsProvider(
-                        _skillsRoot,
-                        options: new AgentSkillsProviderOptions
-                        {
-                            DisableLoadSkillApproval = true,
-                            DisableReadSkillResourceApproval = true,
-                        }),
-                    Compaction(_cheapClient),
-                ]
-                : [Compaction(_cheapClient)],
+                // The summary feeds the UI's reasoning log; non-reasoning deployments reject both, hence "auto" sends neither.
+                Reasoning = Enum.TryParse(setup.Effort, ignoreCase: true, out ReasoningEffort effort)
+                    ? new ReasoningOptions { Effort = effort, Output = ReasoningOutput.Summary }
+                    : null,
+
+                // Hosted by the Responses API: the model searches on its own, no approval needed.
+                Tools = [new HostedWebSearchTool()],
+            },
+            // First, so compaction and the model never see a half-removed tool exchange.
+            AIContextProviders = [new OrphanToolContentFilter(), .. capabilities],
         });
     }
+
+    /// <summary>
+    /// The Magentic One manager. It writes the task and progress ledgers as JSON, so it gets no token cap
+    /// and no tools (Magentic doesn't support tool calls on the manager).
+    /// </summary>
+    public AIAgent CreateMagenticManager(IReadOnlyCollection<string> seated) => new ChatClientAgent(_chatClient, new ChatClientAgentOptions
+    {
+        Name = ModeratorName,
+        Description = "Plans the debate, picks who speaks next and delivers the verdict.",
+        ChatOptions = new()
+        {
+            Instructions =
+                """
+                You are the Moderator chairing the council. Give every member a fair hearing and pick the
+                member whose view the last speaker challenged. Your final answer is a short spoken verdict
+                to Your Majesty, two or three sentences, crediting members by name.
+                """ + "\n" + Cast(seated),
+        },
+
+        // Tags the members' lines by name, which the Responses API would otherwise drop.
+        AIContextProviders = [new OrphanToolContentFilter()],
+    });
 
     public string[] ListWorkspaceFiles() => Directory
         .EnumerateFiles(WorkspaceRoot, "*", SearchOption.AllDirectories)
         .Select(path => Path.GetRelativePath(WorkspaceRoot, path).Replace('\\', '/'))
         .Order(StringComparer.OrdinalIgnoreCase)
         .ToArray();
+
+    private static string Cast(IEnumerable<string> seated) =>
+        $"Around the table: {string.Join(", ", seated)}. The user is Your Majesty. Call everyone by these names.";
 
     // Each agent gets its own provider; they never share a session, so the default state key is fine.
     private static CompactionProvider Compaction(IChatClient summarizer) =>

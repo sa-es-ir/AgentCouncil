@@ -4,8 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- The 1.19 harness types (file access, loop, compaction, background agents) are marked evaluation-only. -->
-    <NoWarn>$(NoWarn);MAAI001</NoWarn>
+    <!-- The harness types (file access, loop, compaction, background agents, Magentic) are marked evaluation-only. -->
+    <!-- The OpenAI Responses client (web search, reasoning summaries) is marked evaluation-only too. -->
+    <NoWarn>$(NoWarn);MAAI001;OPENAI001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,7 +20,6 @@
     <PackageReference Include="Microsoft.Agents.AI.DevUI" />
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
-    <PackageReference Include="Azure.AI.OpenAI" />
   </ItemGroup>
 
   <ItemGroup>
