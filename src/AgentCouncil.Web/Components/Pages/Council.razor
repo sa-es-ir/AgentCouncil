@@ -13,6 +13,10 @@
         <div class="crest">⚖️</div>
         <h1>The Agent Council</h1>
         <p @key="Subtitle" class="subtitle">@Subtitle</p>
+        @if (!_started)
+        {
+            <a class="link-btn" href="/village">Village view</a>
+        }
         @if (_started)
         {
             <button type="button" class="link-btn" title="Leave this debate and pick a new company and topic" @onclick="NewSessionAsync">⟲ New session</button>
@@ -347,12 +351,12 @@
 
 @code {
     // Name is the agent's key on the hub; Title is the character the UI shows.
-    private sealed record Member(string Name, string Icon, string Title, string Role, string Css, string Blurb = "", string Quote = "");
+    internal sealed record Member(string Name, string Icon, string Title, string Role, string Css, string Blurb = "", string Quote = "");
 
     private sealed record Approval(string Agent, string Tool, string Arguments);
 
     // Order matters: seat positions on the stage (and the orb math) follow this order.
-    private static readonly Dictionary<string, Member> Members = new()
+    internal static readonly Dictionary<string, Member> Members = new()
     {
         ["Moderator"] = new("Moderator", "🛡️", "Moderator", "chairs the council", "moderator",
             "Keeps the round table civil. Mostly.", "Order! One voice at a time."),
@@ -373,7 +377,7 @@
     private static readonly MarkdownPipeline Markdown =
         new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
 
-    private static Member Meta(string agent) => Members.GetValueOrDefault(agent) ?? (Unknown with { Name = agent, Title = agent });
+    internal static Member Meta(string agent) => Members.GetValueOrDefault(agent) ?? (Unknown with { Name = agent, Title = agent });
 
     private static MarkupString Render(string text) => (MarkupString)Markdig.Markdown.ToHtml(text, Markdown);
 
@@ -387,7 +391,7 @@
     };
 
     // "auto" sends no reasoning option at all, which is the only safe default on a non-reasoning deployment.
-    private static readonly (string Value, string Name, string Description)[] Orchestrations =
+    internal static readonly (string Value, string Name, string Description)[] Orchestrations =
     [
         ("handoff", "🤝 Handoff", "They pass the floor to each other by name; the Moderator decides when to ask you."),
         ("groupchat", "🔄 Group chat", "Round-robin: everyone gets the floor a fixed number of times."),
@@ -405,7 +409,7 @@
     // The table starts empty: the whole company is waiting in the roster row to be seated.
     private readonly HashSet<string> _selected = [];
     private readonly Dictionary<string, AgentSetup> _tuning =
-        Members.Keys.ToDictionary(name => name, name => new AgentSetup(name, 400, "auto"));
+        Members.Keys.ToDictionary(name => name, name => new AgentSetup(name, 150, "auto"));
     private readonly HashSet<string> _seatNames = [];
     private readonly List<TranscriptEntry> _transcript = new();
     private string _topic = string.Empty;

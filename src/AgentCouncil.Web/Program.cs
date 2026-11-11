@@ -9,7 +9,8 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // One council hub client per Blazor circuit.
-builder.Services.AddScoped<CouncilClient>();
+// ponytail: one client (hub connection, server session) per page, so the page you leave can dispose its own.
+builder.Services.AddTransient<CouncilClient>();
 
 var app = builder.Build();
 

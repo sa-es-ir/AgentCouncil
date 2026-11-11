@@ -9,7 +9,7 @@ namespace AgentCouncil.Agents.Agents;
 /// hard the model should think. <paramref name="Effort"/> is "auto" (send nothing, the model's own
 /// default) or a <see cref="ReasoningEffort"/> name — only reasoning deployments accept the latter.
 /// </summary>
-public sealed record AgentSetup(string Name, int MaxOutputTokens = 400, string Effort = "auto")
+public sealed record AgentSetup(string Name, int MaxOutputTokens = 150, string Effort = "auto")
 {
     /// <summary>The soft instruction that pairs with the hard <see cref="MaxOutputTokens"/> cap.</summary>
     public string Style => MaxOutputTokens switch

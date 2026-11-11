@@ -1,0 +1,309 @@
+/* /village: the council as neighbours. One accent (lantern) marks who holds the floor. */
+
+.village {
+    --v-ink: #26363d;
+    --v-sky-top: #bcd7e4;
+    --v-sky-low: #e4eee4;
+    --v-hill: #a8c88c;
+    --v-meadow: #8db46f;
+    --v-sand: #e9d9b0;
+    --v-paper: #fffdf6;
+    --v-page: #eef3e8;
+    --v-lantern: #ffc43a;
+    --v-walk: cubic-bezier(.16, 1, .3, 1);
+    --v-stride: cubic-bezier(.65, 0, .35, 1); /* state to state: set off, cruise, slow down */
+    min-height: 100vh;
+    padding: 1.5rem 16px 4rem;
+    background: var(--v-page);
+    color: var(--v-ink);
+    font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+}
+
+.village > * { max-width: 1440px; margin-inline: auto; }
+/* Narrow the page until the 16:10 scene fits the window's height, so the square and the talk sit side by side without scrolling. */
+.village > .v-layout { max-width: min(1440px, calc((100vh - 7.5rem) * 1.6 + 26.25rem)); }
+
+.sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+.v-header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.v-header h1 { margin: 0; font: 400 clamp(1.8rem, 4vw, 2.6rem)/1.1 "Young Serif", Georgia, serif; letter-spacing: -.01em; }
+.v-header nav { display: flex; gap: 1.25rem; }
+
+.v-link {
+    background: none; border: 0; padding: 0; cursor: pointer;
+    font: inherit; color: var(--v-ink); text-decoration: underline; text-underline-offset: 3px;
+}
+
+/* ---- the scene: positions are % of the scene, villagers are sized off its width ---- */
+
+/* Scene left, talk right; the talk column takes the scene's height and scrolls inside it. */
+.v-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 25rem); gap: 1.25rem; }
+
+.scene {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    container-type: inline-size;
+    --v: clamp(12px, 2.6cqi, 30px);
+    border: 3px solid var(--v-ink);
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--v-meadow);
+}
+
+.land { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.house {
+    position: absolute;
+    left: calc(var(--x) * 1%);
+    bottom: 55%;
+    width: 20%;
+    transform: translateX(-50%);
+    padding: 0; border: 0; background: none; cursor: pointer;
+    z-index: 2;
+    transition: transform .3s var(--v-walk);
+}
+.house svg { display: block; width: 100%; height: auto; overflow: visible; }
+.house:disabled { cursor: default; }
+.house:not(:disabled):hover { transform: translateX(-50%) translateY(-3%); }
+.house:focus-visible { outline: 3px solid var(--v-ink); outline-offset: 4px; border-radius: 8px; }
+
+.house .door { transform-box: fill-box; transform-origin: left center; transition: transform .5s var(--v-walk); }
+.house.open .door,
+.house:not(:disabled):hover .door { transform: scaleX(.22); }
+
+/* Each house keeps one thing alive. */
+.house .flag { transform-box: fill-box; transform-origin: left center; animation: v-flag 2.6s ease-in-out infinite; }
+.house .scope { transform-box: fill-box; transform-origin: left bottom; animation: v-scope 7s ease-in-out infinite; }
+.house .smoke circle { transform-box: fill-box; transform-origin: center; animation: v-smoke 3.6s ease-out infinite; opacity: 0; }
+.house .smoke circle:nth-child(2) { animation-delay: 1.2s; }
+.house .smoke circle:nth-child(3) { animation-delay: 2.4s; }
+.house .rain path { animation: v-rain .9s linear infinite; }
+.house .rain path:nth-child(2) { animation-delay: .35s; }
+.house .rain path:nth-child(3) { animation-delay: .15s; }
+.house .rain path:nth-child(4) { animation-delay: .6s; }
+
+@keyframes v-flag { 50% { transform: scaleX(.78) skewY(4deg); } }
+@keyframes v-scope { 0%, 100% { transform: rotate(0); } 45% { transform: rotate(-9deg); } 70% { transform: rotate(4deg); } }
+@keyframes v-smoke { 0% { opacity: .9; transform: translate(0, 0) scale(.6); } 100% { opacity: 0; transform: translate(10px, -26px) scale(1.8); } }
+@keyframes v-rain { from { transform: translateY(0); opacity: 1; } to { transform: translateY(16px); opacity: 0; } }
+
+
+/* ---- the land's extras: trees behind the houses, townsfolk strolling the lane ---- */
+
+.tree { position: absolute; left: calc(var(--x) * 1%); bottom: 56%; width: 5.5%; transform: translateX(-50%); z-index: 1; }
+.tree svg, .folk svg, .v-body svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* Two neighbours cross the meadow in opposite directions, passing each other on the way. */
+.folk { position: absolute; left: 30%; top: 51%; z-index: 40; width: calc(var(--v) * 1.9); transform: translate(-50%, -100%); animation: v-stroll-a 26s linear infinite; }
+.folk.b { left: 70%; animation: v-stroll-b 21s linear -6s infinite; }
+.folk.b svg { transform: scaleX(-1); }
+@keyframes v-stroll-a { from { left: -5%; } to { left: 105%; } }
+@keyframes v-stroll-b { from { left: 105%; } to { left: -5%; } }
+
+/* ---- people: feet on (--x, --y); walking is a transition on left/top plus a leg swing ---- */
+
+.villager {
+    position: absolute;
+    left: calc(var(--x) * 1%);
+    top: calc(var(--y) * 1%);
+    z-index: calc(var(--y) * 1 + 10);
+    display: grid; justify-items: center;
+    padding: 0; border: 0; background: none; color: var(--v-ink); font: inherit;
+    transform: translate(-50%, -100%);
+    transform-origin: bottom center;
+    transition: left 1.2s var(--v-walk), top 1.2s var(--v-walk), transform .6s var(--v-walk), opacity .5s;
+    cursor: pointer;
+}
+.villager:disabled { cursor: default; }
+/* At home they wait just inside the door: shrunk and hidden, so inviting them looks like stepping out. */
+.villager.home { transform: translate(-50%, -100%) scale(.55); opacity: 0; pointer-events: none; }
+
+.v-body { display: block; width: calc(var(--v) * 2.6); transition: transform .3s var(--v-walk); }
+.villager.face-left .v-body { transform: scaleX(-1); }
+.v-body svg { transform-origin: bottom center; animation: v-breathe 3.2s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -.6s); }
+
+.leg, .arm { transform-box: fill-box; transform-origin: 50% 0; }
+/* Stepping out of the door when invited: 1.2s of steps to match the 1.2s walk. */
+.villager.out :is(.leg-l, .arm-r) { animation: v-swing-a .6s ease-in-out 2; }
+.villager.out :is(.leg-r, .arm-l) { animation: v-swing-a .6s ease-in-out 2 reverse; }
+.folk :is(.leg-l, .arm-r) { animation: v-swing-a .6s ease-in-out infinite; }
+.folk :is(.leg-r, .arm-l) { animation: v-swing-a .6s ease-in-out infinite reverse; }
+/* Staff and umbrella stay upright. */
+.villager:is(.moderator, .pessimistic) .arm-r { animation: none !important; }
+
+@keyframes v-swing-a { 25% { transform: rotate(16deg); } 75% { transform: rotate(-16deg); } }
+@keyframes v-breathe { 50% { transform: scaleY(1.025); } }
+
+/* ---- in the square: the page's classes say what each villager is doing right now ----
+   walking  legs and arms swing for exactly as long as the walk (the page drops the class when they arrive)
+   talking  the free hand rises and falls with the words, the head bobs
+   listening a slow nod toward the speaker
+   Everyone else stands still, so a class coming off never restarts a swing. */
+.scene.in-session .villager { transition: left 1.6s var(--v-stride), top 1.6s var(--v-stride), transform .6s var(--v-walk), opacity .5s; }
+.scene.in-session .villager :is(.leg-l, .leg-r, .arm-l, .arm-r) { animation: none; }
+.scene.in-session .villager.walking :is(.leg-l, .arm-r) { animation: v-swing-a .4s ease-in-out infinite; }
+.scene.in-session .villager.walking :is(.leg-r, .arm-l) { animation: v-swing-a .4s ease-in-out infinite reverse; }
+.scene.in-session .villager.talking .arm-r { animation: v-gesture 1.7s ease-in-out infinite; }
+.scene.in-session .villager.talking .arm-l { animation: v-gesture-back 2.3s ease-in-out infinite; }
+.scene.in-session .villager.talking .v-body svg { animation: v-bob .9s ease-in-out infinite; }
+.scene.in-session .villager.listening .v-body svg { animation: v-nod 2.4s ease-in-out infinite; }
+
+/* Arms hang from the shoulder; negative turns swing the hand forward, toward whoever they face. */
+@keyframes v-gesture { 0%, 100% { transform: rotate(-8deg); } 22% { transform: rotate(-62deg); } 40% { transform: rotate(-38deg); } 62% { transform: rotate(-70deg); } 82% { transform: rotate(-20deg); } }
+@keyframes v-gesture-back { 0%, 100% { transform: rotate(4deg); } 50% { transform: rotate(-34deg); } }
+@keyframes v-bob { 50% { transform: translateY(-2%) rotate(-1.5deg); } }
+@keyframes v-nod { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(3deg); } 80% { transform: rotate(-.5deg); } 90% { transform: rotate(2.5deg); } }
+
+/* You: on the throne at the near edge of the square, a red carpet running up to the villagers. */
+.villager.king { cursor: default; }
+.villager.king .v-body { width: calc(var(--v) * 3.6); }
+.villager.king .v-body svg { animation: none; }
+
+.v-name {
+    margin-top: 2px; padding: 1px 8px;
+    border-radius: 999px; background: var(--v-paper); border: 2px solid var(--v-ink);
+    font-size: max(11px, calc(var(--v) * .5)); font-weight: 700; white-space: nowrap;
+}
+
+.v-glow {
+    position: absolute; left: 50%; bottom: calc(var(--v) * .9);
+    width: calc(var(--v) * 3.4); height: calc(var(--v) * 1.1);
+    transform: translate(-50%, 50%);
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--v-lantern), transparent);
+    opacity: 0; transition: opacity .4s;
+    z-index: -1;
+}
+
+.villager.speaking { transform: translate(-50%, -100%) scale(1.06); z-index: 120; }
+.villager.speaking .v-glow { opacity: .95; animation: v-glow 1.6s ease-in-out infinite; }
+
+@keyframes v-glow { 50% { opacity: .55; } }
+
+/* ---- the speech bubble over whoever holds the floor ---- */
+
+.bubble {
+    position: absolute;
+    left: calc(var(--cx) * 1%);
+    top: calc(var(--y) * 1%);
+    width: 38%;
+    transform: translate(-50%, calc(-100% - var(--v) * 5.2));
+    z-index: 200;
+    transform-origin: calc(var(--tail) * 1%) 100%;
+    animation: v-pop .45s var(--v-walk) both;
+    padding: .7rem .9rem .8rem;
+    background: var(--v-paper);
+    border: 3px solid var(--v-ink);
+    border-radius: 18px;
+    box-shadow: 0 4px 0 rgba(38, 54, 61, .18);
+}
+.bubble::after {
+    content: ""; position: absolute; top: 100%; left: calc(var(--tail) * 1%);
+    width: 18px; height: 18px; margin: -9px 0 0 -9px;
+    background: var(--v-paper);
+    border-right: 3px solid var(--v-ink); border-bottom: 3px solid var(--v-ink);
+    transform: rotate(45deg);
+}
+/* It grows out of the speaker's mouth when they start talking (the bubble is re-created per speaker). */
+@keyframes v-pop { from { opacity: 0; scale: .6; } }
+.bubble-who { font: 400 .95rem/1 "Young Serif", Georgia, serif; color: var(--c); }
+.bubble p { margin: .35rem 0 0; font-size: clamp(13px, 1.45cqi, 17px); line-height: 1.4; overflow-wrap: anywhere; }
+
+/* Name colours darkened from the shared member colours so they read on paper. */
+.village .moderator { --c-text: #3f5bb8; }
+.village .optimistic { --c-text: #23845a; }
+.village .skeptic { --c-text: #b8452a; }
+.village .pragmatic { --c-text: #93661a; }
+.village .pessimistic { --c-text: #6b55a8; }
+.bubble { --c: var(--c-text); }
+
+/* ---- the talk column: status, then the board before the day starts, the chronicle after ---- */
+
+.talk {
+    contain: size; /* its height comes from the scene, not from how much has been said */
+    display: flex; flex-direction: column; gap: .9rem;
+    padding: 1rem 1rem 1.1rem;
+    background: var(--v-paper);
+    border: 3px solid var(--v-ink); border-radius: 20px;
+}
+
+.v-status { margin: 0; font: 400 1.1rem/1.35 "Young Serif", Georgia, serif; }
+
+.board { display: grid; gap: .9rem; align-content: start; }
+.board-modes { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.v-chip {
+    padding: .4rem .85rem; cursor: pointer;
+    border: 2px solid var(--v-ink); border-radius: 999px;
+    background: transparent; color: var(--v-ink); font: inherit;
+}
+.v-chip.on { background: var(--v-ink); color: var(--v-paper); }
+
+.v-rounds { display: inline-flex; gap: .5rem; align-items: center; }
+
+.v-ask { display: flex; flex-wrap: wrap; gap: .6rem; }
+.talk .v-ask { flex-wrap: nowrap; }
+.talk .v-ask .v-input { flex-basis: 0; }
+.v-input, .v-rounds input {
+    padding: .7rem .9rem;
+    border: 2px solid var(--v-ink); border-radius: 12px;
+    background: #fff; color: var(--v-ink); font: inherit;
+}
+.v-input { flex: 1 1 12rem; min-width: 0; }
+.v-rounds input { width: 4.5rem; padding: .4rem .6rem; }
+.v-input:disabled { opacity: .6; }
+
+.v-btn {
+    flex: 0 0 auto;
+    padding: .7rem 1.2rem; cursor: pointer;
+    border: 2px solid var(--v-ink); border-radius: 12px;
+    background: var(--v-lantern); color: var(--v-ink); font: 700 1rem "Atkinson Hyperlegible", system-ui, sans-serif;
+    box-shadow: 0 3px 0 var(--v-ink);
+}
+.v-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--v-ink); }
+.v-btn:disabled { background: #d9ddd3; cursor: not-allowed; box-shadow: none; }
+
+.village :is(.v-chip, .v-btn, .v-input, .v-link, .v-rounds input):focus-visible { outline: 3px solid var(--v-ink); outline-offset: 2px; }
+
+/* The talk reads like a play script: who, then what they said. */
+.chronicle {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column-reverse; gap: 1rem;
+    list-style: none; margin: 0; padding: .9rem .35rem 0 0;
+    border-top: 2px solid var(--v-ink);
+}
+.line { margin: 0; }
+.line-who { display: block; font: 400 .95rem/1.4 "Young Serif", Georgia, serif; color: var(--c-text, var(--v-ink)); }
+.line-text { line-height: 1.5; overflow-wrap: anywhere; }
+.line-text > :first-child { margin-top: 0; }
+.line-text > :last-child { margin-bottom: 0; }
+.line.you .line-text { font-style: italic; }
+/* The line being spoken grows with the bubble; a caret marks that they're still going. */
+.line.live .line-text > :last-child::after { content: "▍"; color: var(--c-text, var(--v-ink)); animation: v-caret 1s steps(2) infinite; }
+@keyframes v-caret { 50% { opacity: 0; } }
+
+/* The talk stays to the right of the square down to tablet width. */
+@media (max-width: 1100px) {
+    .v-layout { grid-template-columns: minmax(0, 1fr) minmax(260px, 19rem); }
+}
+
+@media (max-width: 720px) {
+    .v-layout { grid-template-columns: 1fr; }
+    .talk { contain: none; }
+    .chronicle { max-height: 60vh; }
+}
+
+@media (max-width: 640px) {
+    .scene { aspect-ratio: 4 / 5; --v: clamp(11px, 3.4cqi, 20px); }
+    .house { width: 21%; }
+    .bubble { width: 66%; left: calc(var(--cxm) * 1%); }
+    .bubble::after { left: calc(var(--tailm) * 1%); }
+    .bubble p { font-size: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .village *, .village *::before, .village *::after { animation: none !important; transition-duration: 0s !important; }
+}

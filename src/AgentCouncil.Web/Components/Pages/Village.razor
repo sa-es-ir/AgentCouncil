@@ -1,0 +1,616 @@
+@page "/village"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject CouncilClient Client
+@inject NavigationManager Nav
+@using System.Globalization
+@using Markdig
+
+<PageTitle>Council Village</PageTitle>
+<HeadContent>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Young+Serif&display=swap" />
+    <link rel="stylesheet" href="@Assets["village.css"]" />
+</HeadContent>
+
+<div class="village">
+    <header class="v-header">
+        <h1>Council Village</h1>
+        <nav>
+            @if (_started)
+            {
+                <button type="button" class="v-link" @onclick="NewDayAsync">Start a new day</button>
+            }
+            <a class="v-link" href="/">Round table view</a>
+        </nav>
+    </header>
+
+    <div class="v-layout">
+        <div class="scene @(_started ? "in-session" : "")">
+            <svg class="land" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                    <linearGradient id="v-sky" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="var(--v-sky-top)" />
+                        <stop offset="1" stop-color="var(--v-sky-low)" />
+                    </linearGradient>
+                </defs>
+                <rect width="100" height="46" fill="url(#v-sky)" />
+                <path d="M0 36 Q14 27 30 33 T60 30 T100 31 V100 H0 Z" fill="var(--v-hill)" />
+                <path d="M0 45 Q50 40 100 45 V100 H0 Z" fill="var(--v-meadow)" />
+                @foreach (var (_, x, _) in Houses)
+                {
+                    <path d="@Lane(x)" fill="none" stroke="var(--v-sand)" stroke-width="12" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+                }
+                <ellipse cx="50" cy="74" rx="40" ry="20" fill="var(--v-sand)" />
+                <path d="M46.5 100 L47.6 82 H52.4 L53.5 100 Z" fill="#B23A48" opacity=".9" />
+            </svg>
+
+            @foreach (var x in Trees)
+            {
+                <span class="tree" style="--x:@F(x)" aria-hidden="true">@((MarkupString)VillageArt.Tree)</span>
+            }
+
+            @foreach (var (name, x, svg) in Houses)
+            {
+                var m = Council.Meta(name);
+                var open = Seated.Contains(name);
+                <button @key="name" type="button" class="house @m.Css @(open ? "open" : "")" style="--x:@F(x)"
+                        disabled="@_started" aria-pressed="@(open ? "true" : "false")"
+                        title="@(open ? $"Send {m.Title} home" : $"Knock on {m.Title}'s door")"
+                        @onclick="() => Toggle(name)">
+                    @((MarkupString)svg)
+                    <span class="sr-only">@(open ? $"Send {m.Title} home" : $"Invite {m.Title}")</span>
+                </button>
+            }
+
+            @for (var i = 0; i < VillageArt.Folk.Length; i++)
+            {
+                <span class="folk @(i == 0 ? "a" : "b")" aria-hidden="true">@((MarkupString)VillageArt.Folk[i])</span>
+            }
+
+            @foreach (var (name, _, _) in Houses)
+            {
+                var m = Council.Meta(name);
+                var (vx, vy, outside) = Spot(name);
+                <button @key="@($"v-{name}")" type="button"
+                        class="villager @m.Css @(outside ? "out" : "home") @Acting(name) @(FacesLeft(name, vx) ? "face-left" : "")"
+                        style="--x:@F(vx); --y:@F(vy); --i:@Array.FindIndex(Houses, h => h.Name == name)"
+                        disabled="@_started" tabindex="-1" aria-hidden="true" @onclick="() => Toggle(name)">
+                    <span class="v-glow"></span>
+                    <span class="v-body">@((MarkupString)VillageArt.People[name])</span>
+                    <span class="v-name">@m.Title</span>
+                </button>
+            }
+
+            <div class="villager king out @(_awaitingUser ? "speaking" : "") @(Addressee == "You" && _phase is Phase.Talk or Phase.Hold ? "listening" : "")" style="--x:50; --y:98" aria-hidden="true">
+                <span class="v-glow"></span>
+                <span class="v-body">@((MarkupString)VillageArt.King)</span>
+                <span class="v-name">You</span>
+            </div>
+
+            @if (Bubble is { } b)
+            {
+                <div @key="_cursor" class="bubble @b.Css" style="@b.Style">
+                    <span class="bubble-who">@b.Who</span>
+                    <p>@b.Text</p>
+                </div>
+            }
+        </div>
+
+        <aside class="talk" aria-label="The talk">
+            <p class="v-status" role="status">@Status</p>
+
+            @if (!_started)
+            {
+                <div class="board">
+                    <div class="board-modes" role="radiogroup" aria-label="How they talk">
+                        @foreach (var (value, name, desc) in Council.Orchestrations)
+                        {
+                            <button type="button" role="radio" aria-checked="@(_mode == value ? "true" : "false")"
+                                    class="v-chip @(_mode == value ? "on" : "")" title="@desc" @onclick="() => _mode = value">@name</button>
+                        }
+                    </div>
+                    @if (_mode != "handoff")
+                    {
+                        <label class="v-rounds">Turns each <input type="number" min="1" max="5" @bind="_rounds" /></label>
+                    }
+                    <div class="v-ask">
+                        <input @bind="_topic" @bind:event="oninput" @onkeydown="OnTopicKeyDown" class="v-input"
+                               placeholder="What should the village talk about?" aria-label="Topic" />
+                        <button type="button" class="v-btn" disabled="@(!CanStart)" @onclick="GatherAsync">Gather in the square</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @* Newest first in the DOM; column-reverse shows it oldest-first and keeps the scroll pinned to the latest line. *@
+                <ol class="chronicle">
+                    @* Only what has been said in the square so far: the line being spoken grows with the bubble. *@
+                    @for (var i = Math.Min(_cursor, _transcript.Count - 1); i >= 0; i--)
+                    {
+                        var entry = _transcript[i];
+                        var live = i == _cursor && entry.Agent != "You";
+                        if (live && _phase is not (Phase.Talk or Phase.Hold))
+                        {
+                            continue;
+                        }
+
+                        var m = Council.Meta(entry.Agent);
+                        <li @key="i" class="line @m.Css @(entry.Agent == "You" ? "you" : "") @(live ? "live" : "")">
+                            <span class="line-who">@(entry.Agent == "You" ? "👑 You" : $"{m.Icon} {m.Title}")</span>
+                            <div class="line-text">@Render(live ? entry.Text[..Math.Min(_reveal, entry.Text.Length)] : entry.Text)</div>
+                        </li>
+                    }
+                </ol>
+                <div class="v-ask">
+                    <input @bind="_reply" @bind:event="oninput" @onkeydown="OnReplyKeyDown" class="v-input" disabled="@(!_awaitingUser)"
+                           placeholder="@(_awaitingUser ? "Speak to your village…" : "The neighbours are talking…")" aria-label="Your reply" />
+                    <button type="button" class="v-btn" disabled="@(!_awaitingUser || string.IsNullOrWhiteSpace(_reply))" @onclick="ReplyAsync">Speak</button>
+                </div>
+            }
+        </aside>
+    </div>
+
+    @if (_approval is { } a)
+    {
+        <div class="modal-backdrop">
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="v-approval-title">
+                <h2 id="v-approval-title">🔐 @Council.Meta(a.Agent).Title wants to run <code>@a.Tool</code></h2>
+                @if (!string.IsNullOrEmpty(a.Arguments))
+                {
+                    <pre>@a.Arguments</pre>
+                }
+                <div class="modal-actions">
+                    <button class="btn danger" @onclick="@(() => RespondAsync("deny"))">Deny</button>
+                    <button class="btn secondary" @onclick="@(() => RespondAsync("always"))">Always approve</button>
+                    <button class="btn" @onclick="@(() => RespondAsync("approve"))">Approve</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private const int Budget = 150;
+
+    // Playback pacing. The hub streams a whole round in seconds; the square plays it back at human speed:
+    // the speaker walks over, talks (the text types out), holds for a beat, then the next one goes.
+    private const int TickMs = 40;
+    private const int CharsPerTick = 2;
+    private const int WalkMs = 1600;
+    private const int HoldMs = 3000;
+
+    private static readonly (string Name, double X, string Svg)[] Houses = VillageArt.Houses;
+
+    private static readonly double[] Trees = [21.5, 40.5, 59.5, 78.5];
+
+    // HTML is disabled so raw markup coming back from the model is rendered as text, not injected.
+    private static readonly MarkdownPipeline Markdown =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+
+    private readonly HashSet<string> _selected = [];
+    private readonly List<TranscriptEntry> _transcript = [];
+    private readonly CancellationTokenSource _stop = new();
+    private List<string> _lineup = [];
+    private string _mode = "groupchat";
+    private int _rounds = 2;
+    private string _topic = string.Empty;
+    private string _reply = string.Empty;
+    private bool _started;
+    private bool _awaitingUser;
+    private string? _error;
+    private Approval? _approval;
+
+    // Playback: _transcript is what the hub sent, _cursor the line the square is acting out now.
+    private int _cursor;
+    private int _reveal;
+    private Phase _phase = Phase.Wait;
+    private long _phaseAt;
+    private bool _walking;
+    private bool _turnOver;
+
+    private enum Phase
+    {
+        Wait,
+        Walk,
+        Talk,
+        Hold,
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _stop.CancelAsync();
+        Client.AgentDelta -= OnAgentDelta;
+        Client.AwaitUserInput -= OnAwaitUserInput;
+        Client.CouncilError -= OnCouncilError;
+        Client.ApprovalRequested -= OnApprovalRequested;
+        await Client.DisposeAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Client.AgentDelta += OnAgentDelta;
+        Client.AwaitUserInput += OnAwaitUserInput;
+        Client.CouncilError += OnCouncilError;
+        Client.ApprovalRequested += OnApprovalRequested;
+        await Client.ConnectAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ = PlayAsync();
+        }
+    }
+
+    private sealed record Approval(string Agent, string Tool, string Arguments);
+
+    private sealed record Speech(string Who, string Text, string Css, string Style);
+
+    // Handoff and Magentic always seat the Moderator, who owns the floor. Same rule the hub enforces.
+    private List<string> Invited => Houses.Select(h => h.Name)
+        .Where(n => (_mode != "groupchat" && n == "Moderator") || _selected.Contains(n))
+        .ToList();
+
+    private List<string> Seated => _started ? _lineup : Invited;
+
+    private bool CanStart => Invited.Count(n => n != "Moderator") >= 1 && Invited.Count >= 2
+        && !string.IsNullOrWhiteSpace(_topic) && Client.IsConnected;
+
+    /// <summary>Who holds the floor in the square (not on the wire): the villager being played back, or you once they're done.</summary>
+    private string? Speaker => _cursor < _transcript.Count && _transcript[_cursor].Agent != "You" ? _transcript[_cursor].Agent
+        : _awaitingUser ? "You"
+        : null;
+
+    /// <summary>Who the speaker answers: whoever spoke just before.</summary>
+    private string? Addressee => Speaker is not null and not "You" && _cursor > 0 ? _transcript[_cursor - 1].Agent : null;
+
+    private string Status
+    {
+        get
+        {
+            if (_error is not null)
+            {
+                return $"Something went wrong: {_error}";
+            }
+
+            if (_approval is not null)
+            {
+                return $"{Council.Meta(_approval.Agent).Title} is waiting for your approval.";
+            }
+
+            if (!_started)
+            {
+                return Invited.Count < 2 ? "Knock on a door to invite a neighbour. Two or more can talk." : $"{Invited.Count} neighbours are in the square.";
+            }
+
+            if (_awaitingUser)
+            {
+                return "Your turn. The village is listening.";
+            }
+
+            if (Speaker is not { } s)
+            {
+                return "The neighbours are thinking…";
+            }
+
+            var to = Addressee switch
+            {
+                "You" or null => "you",
+                var a when a == s => "the square",
+                var a => Council.Meta(a).Title,
+            };
+            return _phase == Phase.Walk ? $"{Council.Meta(s).Title} walks over to {to}." : $"{Council.Meta(s).Title} is talking to {to}.";
+        }
+    }
+
+    /// <summary>The line being spoken, over the speaker's head, kept inside the scene whatever their spot.</summary>
+    private Speech? Bubble
+    {
+        get
+        {
+            if (_phase is not (Phase.Talk or Phase.Hold) || Speaker is not { } s || s == "You" || _reveal == 0)
+            {
+                return null;
+            }
+
+            var (x, y, _) = Spot(s);
+            var text = _transcript[_cursor].Text[.._reveal].Trim();
+            text = text.Length > 260 ? "…" + text[^259..] : text;
+            var (cx, tail) = Anchor(x, 38);
+            var (cxm, tailm) = Anchor(x, 66);
+            var m = Council.Meta(s);
+            return new Speech(m.Title, text, m.Css,
+                $"--y:{F(y)}; --cx:{F(cx)}; --tail:{F(tail)}; --cxm:{F(cxm)}; --tailm:{F(tailm)}");
+        }
+    }
+
+    private static string Lane(double x) =>
+        string.Create(CultureInfo.InvariantCulture, $"M{x} 45 Q{x} 56 {(x + 50) / 2} 62");
+
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static MarkupString Render(string text) => (MarkupString)Markdig.Markdown.ToHtml(text, Markdown);
+
+    // Centre of a bubble `width` % wide under speaker x, clamped into the scene, and where its tail then sits (% of the bubble).
+    private static (double Cx, double Tail) Anchor(double x, double width)
+    {
+        var cx = Math.Clamp(x, (width / 2) + 2, 98 - (width / 2));
+        return (cx, Math.Clamp(50 + ((x - cx) / width * 100), 10, 90));
+    }
+
+    /// <summary>
+    /// <paramref name="share"/> of the way from <paramref name="from"/> to <paramref name="to"/>,
+    /// stopping a body and a name tag short (14% of the scene), then pulled forward into the square so the walk passes in front of whoever sits between (y counts less: the scene is 16:10).
+    /// </summary>
+    private static (double X, double Y, bool Out) Toward((double X, double Y, bool Out) from, (double X, double Y) to, double share, double forward)
+    {
+        var (dx, dy) = (to.X - from.X, to.Y - from.Y);
+        var k = Math.Clamp(1 - (14 / Math.Max(Math.Sqrt((dx * dx) + (dy * .6 * dy * .6)), .01)), 0, share);
+        var (x, y) = (from.X + (k * dx), from.Y + (k * dy));
+        return (x + (forward * (50 - x)), y + (forward * (80 - y)), true);
+    }
+
+    /// <summary>
+    /// Where a villager stands. The speaker walks up to whoever they answer, and that neighbour turns and takes a step
+    /// toward them, so the two meet in the square. Only these numbers change; CSS walks them over.
+    /// </summary>
+    private (double X, double Y, bool Out) Spot(string name)
+    {
+        var seat = Seat(name);
+        if (!seat.Out || Speaker is not { } s || s == "You" || (name != s && name != Addressee))
+        {
+            return seat;
+        }
+
+        if (name != s)
+        {
+            var other = Seat(s);
+            return Toward(seat, (other.X, other.Y), .2, .15);
+        }
+
+        return Addressee switch
+        {
+            "You" => Toward(seat, (50, 90), .5, 0),
+            { } a when a != s && Seated.Contains(a) && Spot(a) is var (ax, ay, _) => Toward(seat, (ax, ay), .55, .2),
+            _ => seat,
+        };
+    }
+
+    /// <summary>In their doorway when not invited, otherwise on the far arc of the square, in house order so no lanes cross.</summary>
+    private (double X, double Y, bool Out) Seat(string name)
+    {
+        var seated = Seated;
+        var index = seated.IndexOf(name);
+        if (index < 0)
+        {
+            return (Array.Find(Houses, h => h.Name == name).X, 45, false);
+        }
+
+        var arc = Math.Min(200.0, 60.0 * (seated.Count - 1));
+        var degrees = seated.Count == 1 ? 0 : (-arc / 2) + (arc * index / (seated.Count - 1));
+        var angle = degrees * Math.PI / 180;
+        return (50 + (29 * Math.Sin(angle)), 73 - (10 * Math.Cos(angle)), true);
+    }
+
+    // The speaker and the one they answer face each other, everyone else faces the speaker, and with nobody talking they face the square.
+    private bool FacesLeft(string name, double x)
+    {
+        var lookAt = Speaker is not { } s || s == "You" ? (double?)null
+            : name == s ? Addressee switch
+            {
+                "You" => 50,
+                { } a when a != s && Seated.Contains(a) => Spot(a).X,
+                _ => null,
+            }
+            : Seated.Contains(s) ? Spot(s).X
+            : null;
+        return (lookAt ?? 50) < x - .5;
+    }
+
+    /// <summary>The CSS state of a villager in the square: walking legs, talking hands, a listening nod.</summary>
+    private string Acting(string name)
+    {
+        var speaking = _phase is Phase.Talk or Phase.Hold;
+        return string.Join(' ',
+            _walking && Movers().Contains(name) ? "walking" : string.Empty,
+            name == Speaker && speaking ? "speaking" : string.Empty,
+            name == Speaker && _phase == Phase.Talk ? "talking" : string.Empty,
+            name == Addressee && name != Speaker && speaking ? "listening" : string.Empty);
+    }
+
+    // Only the last three lines' speakers can be off their seat, so only they can be on the move.
+    private IEnumerable<string> Movers() =>
+        Enumerable.Range(_cursor - 2, 3).Where(i => i >= 0 && i < _transcript.Count).Select(i => _transcript[i].Agent);
+
+    private async Task PlayAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(TickMs));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+            {
+                await InvokeAsync(() =>
+                {
+                    if (Step())
+                    {
+                        StateHasChanged();
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page closed.
+        }
+    }
+
+    /// <summary>One tick of playback. Returns whether anything on screen changed.</summary>
+    private bool Step()
+    {
+        var now = Environment.TickCount64;
+        var changed = false;
+        if (_walking && now - _phaseAt >= WalkMs)
+        {
+            _walking = false;
+            changed = true;
+        }
+
+        if (_cursor >= _transcript.Count)
+        {
+            if (_turnOver && !_awaitingUser)
+            {
+                _awaitingUser = true;
+                return true;
+            }
+
+            return changed;
+        }
+
+        var entry = _transcript[_cursor];
+        var said = _cursor < _transcript.Count - 1 || _turnOver;
+        if (entry.Agent == "You" || (said && string.IsNullOrWhiteSpace(entry.Text)))
+        {
+            Advance(now);
+            return true;
+        }
+
+        switch (_phase)
+        {
+            case Phase.Wait:
+                StartPhase(Phase.Walk, now);
+                _walking = true;
+                return true;
+            case Phase.Walk when now - _phaseAt >= WalkMs:
+                StartPhase(Phase.Talk, now);
+                return true;
+            case Phase.Talk when _reveal < entry.Text.Length:
+                _reveal = Math.Min(entry.Text.Length, _reveal + CharsPerTick);
+                return true;
+            case Phase.Talk when said:
+                StartPhase(Phase.Hold, now);
+                return true;
+            case Phase.Hold when now - _phaseAt >= HoldMs:
+                Advance(now);
+                return true;
+            default:
+                return changed;
+        }
+    }
+
+    // Next line. Whoever just spoke walks back toward their seat while the next speaker sets off.
+    private void Advance(long now)
+    {
+        _cursor++;
+        _reveal = 0;
+        _walking = true;
+        StartPhase(_cursor < _transcript.Count ? Phase.Walk : Phase.Wait, now);
+    }
+
+    private void StartPhase(Phase phase, long now)
+    {
+        _phase = phase;
+        _phaseAt = now;
+    }
+
+    private void Toggle(string name)
+    {
+        if (!_started && !_selected.Remove(name))
+        {
+            _selected.Add(name);
+        }
+    }
+
+    private async Task GatherAsync()
+    {
+        if (!CanStart)
+        {
+            return;
+        }
+
+        _rounds = Math.Clamp(_rounds, 1, 5);
+        _lineup = Invited;
+        _started = true;
+        BeginTurn(_topic);
+        await Client.StartCouncilAsync(_topic, _mode, _rounds, _lineup.Select(n => new AgentSetup(n, Budget, "auto")).ToArray());
+    }
+
+    private async Task ReplyAsync()
+    {
+        if (!_awaitingUser || string.IsNullOrWhiteSpace(_reply))
+        {
+            return;
+        }
+
+        var text = _reply;
+        _reply = string.Empty;
+        BeginTurn(text);
+        await Client.SendUserInputAsync(text);
+    }
+
+    private async Task RespondAsync(string decision)
+    {
+        _approval = null;
+        _error = null;
+        await Client.RespondToApprovalAsync(decision);
+    }
+
+    private void BeginTurn(string text)
+    {
+        _transcript.Add(new TranscriptEntry { Agent = "You", Text = text });
+        _awaitingUser = false;
+        _turnOver = false;
+        _error = null;
+    }
+
+    private async Task OnTopicKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await GatherAsync();
+        }
+    }
+
+    private async Task OnReplyKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ReplyAsync();
+        }
+    }
+
+    /// <summary>Disposing the connection ends the server session; a reload gives an empty square.</summary>
+    private async Task NewDayAsync()
+    {
+        await Client.DisposeAsync();
+        Nav.NavigateTo("/village", forceLoad: true);
+    }
+
+    // Hub events only record what was said; the playback tick decides when the square shows it.
+    private void OnAgentDelta(string agent, string text) => InvokeAsync(() =>
+    {
+        if (_transcript.Count == 0 || _transcript[^1].Agent != agent)
+        {
+            _transcript.Add(new TranscriptEntry { Agent = agent });
+        }
+
+        _transcript[^1].Text += text;
+    });
+
+    private void OnAwaitUserInput() => InvokeAsync(() => _turnOver = true);
+
+    private void OnCouncilError(string message) => InvokeAsync(() =>
+    {
+        _error = message;
+        _turnOver = true;
+        StateHasChanged();
+    });
+
+    private void OnApprovalRequested(string agent, string tool, string arguments) => InvokeAsync(() =>
+    {
+        _approval = new Approval(agent, tool, arguments);
+        StateHasChanged();
+    });
+}
