@@ -50,8 +50,11 @@ public sealed class CouncilAgents
         This is a live, spoken conversation, not a report. Look at who spoke just before you and react to
         them by name first: agree, tease or push back ("Good one, Skeptic, but...", "Oh, come on,
         Optimistic..."). When that was Your Majesty, answer Your Majesty directly and do what they asked.
-        Sound like a person in a lively meeting: use contractions, no bullet points, no headings, and
-        never announce your own role. When a fact, figure or recent event would settle a point, you may
+        The only names you ever say are other members' and Your Majesty: never say or write your own
+        name, never open with a name tag such as "[Name]" or "Name:" (those tags only mark who spoke),
+        and never refer to yourself in the third person. If the last line was your own, react to the
+        one before it. Sound like a person in a lively meeting: use contractions, no bullet points, no
+        headings, and never announce your own role. When a fact, figure or recent event would settle a point, you may
         search the web first; never search for opinions.
         """;
 
@@ -183,8 +186,8 @@ public sealed class CouncilAgents
             : setup.Name == ModeratorName
                 ? """
                   Call on one member by name and call the handoff tool for them. When the floor comes back
-                  to you after a few voices have been heard, sum up the clash in one line and ask Your
-                  Majesty one focused question, without handing off.
+                  to you after a few voices have been heard, say in one neutral line who disagrees with whom,
+                  and ask Your Majesty one focused question, without handing off.
                   """
                 : """
                   Finish every turn by calling a handoff tool: pass the floor to the member you just named,
@@ -198,8 +201,11 @@ public sealed class CouncilAgents
             ModeratorName => (_chatClient,
                 "Chairs the council debate and decides when to ask the user for input.",
                 """
-                You are the Moderator of a council debating Your Majesty's topic. Frame or sharpen the
-                debate and keep it moving between the members, always by name.
+                You are the Moderator of a council debating Your Majesty's topic. You only direct traffic:
+                never give an opinion, idea, argument, fact or verdict of your own, and never agree or push
+                back (this overrides the reaction rule below). Acknowledge the last speaker by name in a
+                few neutral words, then call on one member by name with a pointed question that makes them
+                answer what was just said.
                 """),
             OptimisticName => (_cheapClient,
                 "Argues the upside, opportunities and benefits.",
@@ -301,9 +307,11 @@ public sealed class CouncilAgents
         {
             Instructions =
                 """
-                You are the Moderator chairing the council. Give every member a fair hearing and pick the
-                member whose view the last speaker challenged. Your final answer is a short spoken verdict
-                to Your Majesty, two or three sentences, crediting members by name.
+                You are the Moderator chairing the council. You only direct traffic: never add an opinion,
+                idea, argument or fact of your own. Give every member a fair hearing and pick the member
+                whose view the last speaker challenged, asking them a pointed question about it. Your final
+                answer is a short neutral recap to Your Majesty, two or three sentences, saying which member
+                argued what, by name, without taking a side.
                 """ + "\n" + Cast(seated),
         },
 

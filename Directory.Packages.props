@@ -1,33 +1,33 @@
 <Project>
-  <PropertyGroup>
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-  </PropertyGroup>
-  <ItemGroup>
-    <!-- Microsoft Agent Framework (core GA; Hosting + DevUI are prerelease) -->
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.27.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.27.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.27.0-preview.261030.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.27.0-preview.261030.1" />
-    <!-- LLM client stack -->
-    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.10.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.1" />
-    <!-- SignalR client + markdown rendering for the Blazor front-end -->
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
-    <PackageVersion Include="Markdig" Version="0.41.3" />
-    <PackageVersion Include="MessagePack" Version="3.1.12" />
-    <PackageVersion Include="Aspire.Hosting.Azure.AppContainers" Version="13.2.4" />
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.6" />
-    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
-    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
-  </ItemGroup>
+	<PropertyGroup>
+		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+		<CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+	</PropertyGroup>
+	<ItemGroup>
+		<!-- Microsoft Agent Framework (core GA; Hosting + DevUI are prerelease) -->
+		<PackageVersion Include="Microsoft.Agents.AI" Version="1.27.0" />
+		<PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.27.0" />
+		<PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.27.0-preview.261030.1" />
+		<PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.27.0-preview.261030.1" />
+		<!-- LLM client stack -->
+		<PackageVersion Include="Microsoft.Extensions.AI" Version="10.10.0" />
+		<PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.1" />
+		<!-- SignalR client + markdown rendering for the Blazor front-end -->
+		<PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
+		<PackageVersion Include="Markdig" Version="0.41.3" />
+		<PackageVersion Include="MessagePack" Version="3.1.12" />
+		<PackageVersion Include="Aspire.Hosting.Azure.AppContainers" Version="13.6.5" />
+		<PackageVersion Include="Aspire.Hosting.Testing" Version="13.6.5" />
+		<PackageVersion Include="coverlet.collector" Version="10.0.1" />
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+		<PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+		<PackageVersion Include="xunit.v3" Version="3.2.2" />
+		<PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
+		<PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
+		<PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
+		<PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.16.0" />
+		<PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.15.1" />
+	</ItemGroup>
 </Project>

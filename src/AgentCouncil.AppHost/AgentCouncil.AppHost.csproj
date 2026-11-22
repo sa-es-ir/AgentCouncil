@@ -1,21 +1,21 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.2.4">
+<Project Sdk="Aspire.AppHost.Sdk/13.6.5">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <UserSecretsId>c7071d57-0b5b-4e54-aeb5-abec5f917c8a</UserSecretsId>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<UserSecretsId>c7071d57-0b5b-4e54-aeb5-abec5f917c8a</UserSecretsId>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.Azure.AppContainers" />
-    <PackageReference Include="MessagePack" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Aspire.Hosting.Azure.AppContainers" />
+		<PackageReference Include="MessagePack" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\AgentCouncil.Agents\AgentCouncil.Agents.csproj" />
-    <ProjectReference Include="..\AgentCouncil.Web\AgentCouncil.Web.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\AgentCouncil.Agents\AgentCouncil.Agents.csproj" />
+		<ProjectReference Include="..\AgentCouncil.Web\AgentCouncil.Web.csproj" />
+	</ItemGroup>
 
 </Project>
