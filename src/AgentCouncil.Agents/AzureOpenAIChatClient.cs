@@ -1,4 +1,8 @@
 using System.ClientModel;
+using System.ClientModel.Primitives;
+using System.IO.Pipelines;
+using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenAI.Responses;
@@ -31,9 +35,9 @@ public static class AzureOpenAIChatClient
         bool enableSensitiveData = builder.Environment.IsDevelopment();
 
         // Azure's v1 endpoint speaks the plain OpenAI protocol, so the stock OpenAI client reaches it.
-        ResponsesClient responses = new OpenAIClient(
-            new ApiKeyCredential(key),
-            new OpenAIClientOptions { Endpoint = new Uri(V1(endpoint)) }).GetResponsesClient();
+        OpenAIClientOptions clientOptions = new() { Endpoint = new Uri(V1(endpoint)) };
+        clientOptions.AddPolicy(new IncompleteWebSearchPolicy(), PipelinePosition.PerCall);
+        ResponsesClient responses = new OpenAIClient(new ApiKeyCredential(key), clientOptions).GetResponsesClient();
 
         builder.Services.AddChatClient(_ => responses.AsIChatClient(deployment))
             .Use(Stateless)
@@ -120,5 +124,103 @@ public static class AzureOpenAIChatClient
         }
 
         return (endpoint, key, deployment, string.IsNullOrWhiteSpace(cheapDeployment) ? null : cheapDeployment);
+    }
+
+    /// <summary>
+    /// A web search cut short (e.g. by the turn's output budget) comes back as a web_search_call with
+    /// status "incomplete", which OpenAI 2.14/2.15 can't deserialize (WebSearchCallStatus has no such value),
+    /// so the whole stream throws mid-turn. Rewrites that status to "failed" in each SSE line before the SDK
+    /// parses it.
+    /// </summary>
+    // ponytail: streaming responses only (all agents stream); drop this once the OpenAI release after 2.15.0 ships
+    // openai/openai-dotnet#1267 (WebSearchCallStatus becomes an extensible enum that keeps unknown values).
+    internal sealed class IncompleteWebSearchPolicy : PipelinePolicy
+    {
+        public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
+        {
+            ProcessNext(message, pipeline, currentIndex);
+            Wrap(message);
+        }
+
+        public override async ValueTask ProcessAsync(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
+        {
+            await ProcessNextAsync(message, pipeline, currentIndex).ConfigureAwait(false);
+            Wrap(message);
+        }
+
+        internal static string FixLine(string line)
+        {
+            if (!line.StartsWith("data:", StringComparison.Ordinal)
+                || !line.Contains("web_search_call", StringComparison.Ordinal)
+                || !line.Contains("\"incomplete\"", StringComparison.Ordinal))
+            {
+                return line;
+            }
+
+            JsonNode? root = JsonNode.Parse(line[5..]);
+            Fix(root);
+            return "data: " + root?.ToJsonString();
+        }
+
+        private static void Wrap(PipelineMessage message)
+        {
+            if (message.Response is { ContentStream: { } source } response
+                && response.Headers.TryGetValue("Content-Type", out string? type)
+                && type?.StartsWith("text/event-stream", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                Pipe pipe = new();
+                _ = PumpAsync(source, pipe.Writer);
+                response.ContentStream = pipe.Reader.AsStream();
+            }
+        }
+
+        private static async Task PumpAsync(Stream source, PipeWriter writer)
+        {
+            Exception? error = null;
+            try
+            {
+                using StreamReader reader = new(source);
+                while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
+                {
+                    FlushResult flushed = await writer.WriteAsync(Encoding.UTF8.GetBytes(FixLine(line) + "\n")).ConfigureAwait(false);
+                    if (flushed.IsCompleted)
+                    {
+                        break; // the SDK stopped reading
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+
+            await writer.CompleteAsync(error).ConfigureAwait(false);
+        }
+
+        private static void Fix(JsonNode? node)
+        {
+            if (node is JsonArray array)
+            {
+                foreach (JsonNode? item in array)
+                {
+                    Fix(item);
+                }
+            }
+            else if (node is JsonObject obj)
+            {
+                if (Is(obj["type"], "web_search_call") && Is(obj["status"], "incomplete"))
+                {
+                    obj["status"] = "failed";
+                }
+
+                foreach (KeyValuePair<string, JsonNode?> child in obj)
+                {
+                    Fix(child.Value);
+                }
+            }
+        }
+
+        private static bool Is(JsonNode? node, string value) =>
+            node is JsonValue v && v.TryGetValue(out string? s) && s == value;
     }
 }
