@@ -71,9 +71,9 @@
     transform: translate(-50%, -100%);
     z-index: calc(var(--y) * 1 + 10);
 }
-.house { width: calc(var(--w) * 1%); filter: drop-shadow(-.5cqi .6cqi 0 rgba(38, 54, 61, .18)); }
+.house { width: calc(var(--w) * 1%); filter: drop-shadow(calc(var(--sun) * .6cqi) .6cqi 0 rgba(38, 54, 61, .18)); }
 .tree { width: 3.6%; }
-.well { width: 5%; filter: drop-shadow(-.4cqi .5cqi 0 rgba(38, 54, 61, .18)); }
+.well { width: 5%; filter: drop-shadow(calc(var(--sun) * .5cqi) .5cqi 0 rgba(38, 54, 61, .18)); }
 :is(.house, .tree, .well, .v-body, .kid, .swing, .dog) svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 /* Each house keeps one thing alive. */
@@ -140,8 +140,13 @@
 .villager {
     display: grid; justify-items: center;
     transform-origin: bottom center;
-    transition: left var(--t, 0ms) linear, top var(--t, 0ms) linear, transform .6s var(--v-walk);
+    /* z-index rides along with top, so a walker passes behind a house until they are really in front of it. */
+    transition: left var(--t, 0ms) linear, top var(--t, 0ms) linear, z-index var(--t, 0ms) linear, transform .6s var(--v-walk), opacity .8s;
 }
+/* In a conversation, step to the front at once. */
+.villager:is(.speaking, .listening) { transition: left var(--t, 0ms) linear, top var(--t, 0ms) linear, transform .6s var(--v-walk), opacity .8s; }
+/* At night each villager goes in through their own door. */
+.villager.indoors { opacity: 0; transform: translate(-50%, -100%) scale(.85); }
 
 /* Nearer the front, a little bigger. */
 .v-body { display: block; width: calc(var(--v) * 2.2 * (.72 + var(--y) / 250)); transition: transform .3s var(--v-walk); }
@@ -149,8 +154,9 @@
 .v-body svg { transform-origin: bottom center; animation: v-breathe 3.2s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -.6s); }
 .v-shadow {
     position: absolute; left: 50%; bottom: calc(var(--v) * -.2); z-index: -1;
-    width: calc(var(--v) * 1.7); height: calc(var(--v) * .5);
-    transform: translateX(-50%);
+    /* The sun moves through the day (--sun, by data-hour), and the shadow falls the other way. */
+    width: calc(var(--v) * (1.5 + .3 * max(var(--sun), -1 * var(--sun)))); height: calc(var(--v) * .5);
+    transform: translateX(calc(-50% + var(--sun) * var(--v) * .45));
     border-radius: 50%; background: rgba(38, 54, 61, .25);
 }
 
@@ -159,14 +165,45 @@
 
 /* walking: legs and arms swing for as long as the walk. talking: the free hand rises and falls, the head bobs.
    listening: a slow nod toward the speaker. Everyone else stands still. */
-.villager.walking :is(.leg-l, .arm-r) { animation: v-swing-a .55s ease-in-out infinite; }
-.villager.walking :is(.leg-r, .arm-l) { animation: v-swing-a .55s ease-in-out infinite reverse; }
-.villager.talking .arm-r { animation: v-gesture 1.7s ease-in-out infinite; }
+/* Short quick steps with a bounce on each one, so the feet keep up with the ground they cover. */
+.villager.walking :is(.leg-l, .arm-r) { animation: v-swing-a .44s ease-in-out infinite; }
+.villager.walking :is(.leg-r, .arm-l) { animation: v-swing-a .44s ease-in-out infinite reverse; }
+.villager.walking .v-body { animation: v-step .11s ease-in-out infinite alternate; }
+.villager.talking .arm-r { animation: var(--gesture, v-gesture 1.7s ease-in-out infinite); }
+.village .mouth { opacity: 0; }
+.villager.talking .mouth { animation: v-mouth .26s step-end infinite; }
+.v-body .eyes { transform-box: fill-box; transform-origin: center; animation: v-blink 5s infinite; animation-delay: calc(var(--i, 0) * -1.3s); }
+
+/* Everyone talks with their own hands. The Elder and the Gravedigger lean on cane and shovel, so they use the other hand or the whole body. */
+.villager.mayor { --gesture: v-orate 2.6s ease-in-out infinite; }
+.villager.baker { --gesture: v-baton 1.1s ease-in-out infinite; }
+.villager.astronomer { --gesture: v-point 2.8s ease-in-out infinite; }
+.villager.blacksmith { --gesture: v-strike .9s linear infinite; }
+.villager.merchant { --gesture: v-count .5s ease-in-out infinite alternate; }
+.villager.seer { --gesture: v-conjure 2.2s ease-in-out infinite; }
+.villager.bard { --gesture: v-strum .34s ease-in-out infinite alternate; }
+.villager.crier { --gesture: v-ring .28s ease-in-out infinite alternate; }
+.villager.talking.seer .arm-l { animation: v-conjure 2.2s ease-in-out -1.1s infinite; }
+.villager.talking.elder .arm-l { animation: v-wag-finger .7s ease-in-out infinite alternate; }
+.villager.talking.gravedigger .v-body svg { animation: v-sway 2.6s ease-in-out infinite; }
 .villager.talking .arm-l { animation: v-gesture-back 2.3s ease-in-out infinite; }
 .villager.talking .v-body svg { animation: v-bob .9s ease-in-out infinite; }
 .villager.listening .v-body svg { animation: v-nod 2.4s ease-in-out infinite; }
 
-@keyframes v-swing-a { 25% { transform: rotate(16deg); } 75% { transform: rotate(-16deg); } }
+@keyframes v-swing-a { 25% { transform: rotate(22deg); } 75% { transform: rotate(-22deg); } }
+@keyframes v-step { to { translate: 0 -5%; } }
+@keyframes v-blink { 0%, 95%, 100% { transform: none; } 97% { transform: scaleY(.1); } }
+@keyframes v-mouth { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes v-orate { 0%, 100% { transform: rotate(-10deg); } 18% { transform: rotate(-155deg); } 40% { transform: rotate(-138deg); } 55% { transform: rotate(-152deg); } 75% { transform: rotate(-70deg); } }
+@keyframes v-baton { 0%, 100% { transform: rotate(-25deg); } 25% { transform: rotate(-80deg); } 50% { transform: rotate(-40deg); } 75% { transform: rotate(-95deg); } }
+@keyframes v-point { 0%, 100% { transform: rotate(-10deg); } 15%, 85% { transform: rotate(-160deg); } 40% { transform: rotate(-148deg); } 55% { transform: rotate(-168deg); } }
+@keyframes v-strike { 0%, 100% { transform: rotate(-15deg); } 45% { transform: rotate(-140deg); animation-timing-function: cubic-bezier(.6, 0, 1, .6); } 58% { transform: rotate(-8deg); } }
+@keyframes v-count { from { transform: rotate(-32deg); } to { transform: rotate(-50deg); } }
+@keyframes v-conjure { 0%, 100% { transform: rotate(-70deg); } 25% { transform: rotate(-95deg); } 50% { transform: rotate(-112deg); } 75% { transform: rotate(-85deg); } }
+@keyframes v-strum { from { transform: rotate(-20deg); } to { transform: rotate(-40deg); } }
+@keyframes v-ring { from { transform: rotate(-112deg); } to { transform: rotate(-142deg); } }
+@keyframes v-wag-finger { from { transform: rotate(-68deg); } to { transform: rotate(-96deg); } }
+@keyframes v-sway { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
 @keyframes v-breathe { 50% { transform: scaleY(1.025); } }
 @keyframes v-gesture { 0%, 100% { transform: rotate(-8deg); } 22% { transform: rotate(-62deg); } 40% { transform: rotate(-38deg); } 62% { transform: rotate(-70deg); } 82% { transform: rotate(-20deg); } }
 @keyframes v-gesture-back { 0%, 100% { transform: rotate(4deg); } 50% { transform: rotate(-34deg); } }
@@ -239,6 +276,41 @@
 .village .seer { --c-text: #6b55a8; }
 .village .bard { --c-text: #b23a62; }
 .village .crier { --c-text: #b8452a; }
+
+/* ---- the time of day: one step per subject (Village.razor's Hour), dawn before the day starts, night after the last ---- */
+
+@property --sun { syntax: "<number>"; inherits: true; initial-value: -1; }
+.scene { --sun: -1; transition: --sun 6s ease-in-out; }
+.scene[data-hour="0"] { --sun: 1.6; }
+.scene[data-hour="1"] { --sun: 1.1; }
+.scene[data-hour="2"] { --sun: .5; }
+.scene[data-hour="3"] { --sun: 0; }
+.scene[data-hour="4"] { --sun: -.6; }
+.scene[data-hour="5"] { --sun: -1.4; }
+
+/* One wash over the whole scene, multiplied in: rose at dawn, clear at noon, amber at dusk, deep blue at night. */
+.light { position: absolute; inset: 0; z-index: 185; pointer-events: none; mix-blend-mode: multiply; background: #fff; transition: background-color 6s ease-in-out; }
+.scene[data-hour="0"] .light { background: #fde2dc; }
+.scene[data-hour="1"] .light { background: #fff0da; }
+.scene[data-hour="2"] .light { background: #fffaf0; }
+.scene[data-hour="4"] .light { background: #ffe7c2; }
+.scene[data-hour="5"] .light { background: #f9cfae; }
+.scene[data-hour="6"] .light { background: #4d5c9c; }
+
+/* A warm glow over each house whose owner has gone in for the night, screened over the blue. */
+.lamp {
+    position: absolute; left: calc(var(--x) * 1%); top: calc(var(--y) * 1%); z-index: 186;
+    width: calc(var(--w) * 1.15%); aspect-ratio: 1; translate: -50% -50%;
+    border-radius: 50%; pointer-events: none; mix-blend-mode: screen;
+    background: radial-gradient(closest-side, rgba(255, 214, 120, .85), rgba(255, 170, 70, .3) 55%, transparent);
+    opacity: 0; transition: opacity 1.5s;
+}
+.lamp.lit { opacity: 1; animation: v-flicker 3.4s ease-in-out infinite; }
+@keyframes v-flicker { 50% { opacity: .8; } }
+
+/* The children go home at night too, and the sign comes down. */
+.play, .v-topic { transition: opacity 2s; }
+.scene[data-hour="6"] :is(.play, .v-topic) { opacity: 0; }
 
 /* The current subject, pinned at the top of the scene: under the speech bubble, over everything else. */
 .v-topic {

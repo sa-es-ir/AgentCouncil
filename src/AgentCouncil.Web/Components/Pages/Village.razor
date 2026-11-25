@@ -17,14 +17,14 @@
     <header class="v-header">
         <h1>Council Village</h1>
         <nav>
-            <button type="button" class="v-btn" disabled="@(!Client.IsConnected)" @onclick="ToggleAsync">@(!_started ? "Start the day" : _paused ? "Carry on" : "Pause")</button>
+            <button type="button" class="v-btn" disabled="@(!Client.IsConnected)" @onclick="ToggleAsync">@(!_started ? "Start the day" : Night ? "Start a new day" : _paused ? "Carry on" : "Pause")</button>
             <a class="v-link" href="/">Round table view</a>
         </nav>
     </header>
 
     @* Wider than tall: on a phone the panorama scrolls sideways rather than squashing. *@
     <div class="scene-wrap">
-        <div class="scene" aria-hidden="true">
+        <div class="scene" data-hour="@Hour" aria-hidden="true">
             @if (_subject is not null)
             {
                 <p class="v-topic">Today's talk: @_subject</p>
@@ -84,13 +84,20 @@
             {
                 var m = VillageCast.Meta(name);
                 var (vx, vy) = _pos[name];
-                <div @key="@($"v-{name}")" class="villager @m.Css @Acting(name) @(FacesLeft(name) ? "face-left" : "")"
+                <div @key="@($"v-{name}")" class="villager @m.Css @Acting(name) @(FacesLeft(name) ? "face-left" : "") @(Indoors(name) ? "indoors" : "")"
                      style="--x:@F(vx); --y:@F(vy); --t:@(_dur[name])ms; --i:@Array.IndexOf(Order, name)">
                     <span class="v-shadow"></span>
                     <span class="v-glow"></span>
                     <span class="v-body">@((MarkupString)VillageArt.People[name])</span>
                     <span class="v-name">@m.Title</span>
                 </div>
+            }
+
+            @* The time of day tints the whole scene (village.css, by data-hour); at night a lamp comes on in every house whose owner is in. *@
+            <div class="light"></div>
+            @foreach (var (name, x, y, w, _) in Houses)
+            {
+                <span @key="@($"lamp-{name}")" class="lamp @(Indoors(name) ? "lit" : "")" style="--x:@F(x); --y:@F(y - (w * .55)); --w:@F(w)"></span>
             }
 
             @if (Bubble is { } b)
@@ -279,6 +286,14 @@
 
     private bool Speaking => _phase is Phase.Talk or Phase.Hold;
 
+    /// <summary>The day's talk has run out (SubjectsPerDay): night until the user starts a new day.</summary>
+    private bool Night => _started && _subjects > SubjectsPerDay;
+
+    /// <summary>The time of day, one step per subject: 0 dawn (before the day starts), 1-5 morning to dusk, 6 night.</summary>
+    private int Hour => !_started ? 0 : Math.Min(_subjects, SubjectsPerDay + 1);
+
+    private bool Indoors(string name) => Night && !Walking(name) && Distance(_pos[name], Doorstep(name)) < 1; // 1: Move clamps the back row's doorsteps by a hair
+
     /// <summary>Playback has shown everything the hub sent for the round, and the round is over.</summary>
     private bool CaughtUp => _cursor >= _transcript.Count && _turnOver;
 
@@ -304,7 +319,8 @@
 
             if (Speaker is not { } s)
             {
-                return _paused && CaughtUp ? "The village is taking a breather."
+                return Night ? "Night falls and the village goes to sleep. Start a new day to hear more."
+                    : _paused && CaughtUp ? "The village is taking a breather."
                     : CaughtUp ? "The talk drifts on…"
                     : $"Word is going round about {_subject}…";
             }
@@ -487,7 +503,15 @@
         var changed = walking || _anyWalking; // one more render as the last walker arrives, to stop their legs
         _anyWalking = walking;
 
-        if (_now >= _nextWander)
+        if (Night)
+        {
+            // Everyone heads home and goes in (Indoors), and their lamp comes on.
+            foreach (var n in Order.Where(n => !Walking(n)))
+            {
+                Move(n, Doorstep(n));
+            }
+        }
+        else if (_now >= _nextWander)
         {
             // Someone not in the conversation strolls somewhere else, or home; calmer while the village is talking.
             _nextWander = _now + (_started && !CaughtUp ? Random.Shared.Next(3500, 6500) : Random.Shared.Next(1400, 3000));

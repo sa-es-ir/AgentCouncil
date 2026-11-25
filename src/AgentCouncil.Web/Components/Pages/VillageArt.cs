@@ -406,8 +406,9 @@ internal static class VillageArt
           {front}
           <rect x="26.5" y="33" width="7" height="6" fill="{skin}"/>
           <circle cx="30" cy="25" r="11" fill="{skin}" stroke="{Ink}" stroke-width="2"/>
-          <circle cx="29" cy="25" r="1.4" fill="{Ink}"/><circle cx="35.5" cy="25" r="1.4" fill="{Ink}"/>
+          <g class="eyes"><circle cx="29" cy="25" r="1.4" fill="{Ink}"/><circle cx="35.5" cy="25" r="1.4" fill="{Ink}"/></g>
           <path d="{(frown ? "M30 32 q3 -2.5 6 0" : "M30 30 q3 2.5 6 0")}" fill="none" stroke="{Ink}" stroke-width="1.5" stroke-linecap="round"/>
+          <ellipse class="mouth" cx="33" cy="31" rx="2.3" ry="1.9" fill="#7A2E2E" stroke="{Ink}" stroke-width="1"/>
           {hair}
           <g class="arm arm-r">{hand}<rect x="41" y="42" width="7" height="24" rx="3.5" fill="{cloth}" stroke="{Ink}" stroke-width="2"/><circle cx="44.5" cy="67" r="3.5" fill="{skin}" stroke="{Ink}" stroke-width="1.5"/></g>
         </svg>

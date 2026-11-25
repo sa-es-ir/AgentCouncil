@@ -33,6 +33,18 @@ Each agent opens its turn by reacting to whoever spoke before it, by name ("Good
 - **Pick up where you left off.** Start a new council from any `.md` file in the workspace (e.g. a previous `decision-record.md`).
 - **Watch it think.** Every agent turn and LLM call is traced in the Aspire dashboard, and the Agent Framework **DevUI** lets you talk to each agent directly.
 
+## The village
+
+Open `/village` for a lighter side of the same app: ten neighbours (the Mayor, Baker, Astronomer, Blacksmith, Gravedigger, Merchant, Elder, Seer, Bard and Town Crier) making small talk in the lanes of a little animated village.
+
+- Press **Start the day**. The Town Crier brings up a subject (the weather, market prices, the Mayor's new tax…), and each neighbour walks over to whoever spoke last and answers them. The Bard sums it up in rhyme at the end.
+- The current subject shows on a sign at the top of the scene. Everything said is kept in *Everything overheard so far* under it.
+- Each subject is one hour of the day: the light moves from dawn to dusk, and after five subjects night falls. Everyone goes home and their lamps come on, so a forgotten tab stops calling the model. Press **Start a new day** to go on.
+- **Pause** stops on the line being spoken. **Carry on** continues from there.
+- Every neighbour talks with their own gesture: the Blacksmith brings the hammer down, the Bard strums, the Crier rings the bell.
+
+The village uses group chat only, with the cheaper deployment and short turns.
+
 ## Getting started
 
 ### Prerequisites
@@ -115,6 +127,7 @@ Before your first deploy:
 - The **workspace** (`src/AgentCouncil.Agents/workspace/`) is shared by everyone connected to the same server, and is git-ignored.
 - If your deployment is **not a reasoning model**, leave effort on `auto`. The other settings send a reasoning parameter that non-reasoning models reject.
 - Closing the browser tab ends your session and stops any background Researcher work.
+- All agents are told to speak **plain, simple English** (short sentences, common words, no idioms), based on Simplified Technical English (ASD-STE100). The rule is `PlainEnglish` in `src/AgentCouncil.Agents/Agents/CouncilAgents.cs`. Change it there if you want a different style.
 - Skills for the Skeptic live in `src/AgentCouncil.Agents/skills/` as `SKILL.md` files. Add your own folder to give it new tricks.
 
 ## Project layout
@@ -122,7 +135,7 @@ Before your first deploy:
 ```
 src/AgentCouncil.AppHost          Aspire orchestration (entry point, run this)
 src/AgentCouncil.Agents           Agents, workflows, harness, SignalR hub, DevUI
-src/AgentCouncil.Web              Blazor Server UI
+src/AgentCouncil.Web              Blazor Server UI (the round table at /, the village at /village)
 src/AgentCouncil.ServiceDefaults  Shared telemetry and health checks
 test/AgentCouncil.AppHost.Tests   Tests
 docs/                             Deeper notes on the Agent Framework and the harness
