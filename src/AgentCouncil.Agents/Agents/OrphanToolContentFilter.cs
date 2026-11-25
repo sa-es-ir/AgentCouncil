@@ -21,11 +21,20 @@ internal sealed class OrphanToolContentFilter : AIContextProvider
 
         // The Responses API has no author field, so another member's turn would read as this agent's own.
         // It becomes a user line tagged with the speaker; only its words survive, its tool traffic is theirs.
+        // (Group chat passes other members' turns as user messages instead; the chat client tags those,
+        // since a message rewritten here is saved to the agent's history as new input.)
         List<ChatMessage> messages = (input.Messages ?? [])
             .Select(m => m.Role == ChatRole.Assistant && m.AuthorName is { } author && author != context.Agent.Name
                 ? (string.IsNullOrWhiteSpace(m.Text) ? null : new ChatMessage(ChatRole.User, $"[{author}] {m.Text}") { AuthorName = author })
                 : m)
             .OfType<ChatMessage>()
+            .ToList();
+
+        // Group chat never passes a round's last reply on, so the hub re-sends it with the next turn
+        // (CouncilSession.UnheardReply); whoever already has it would otherwise see it twice in a row.
+        messages = messages
+            .Where((m, i) => i == 0 || m.AuthorName is null || m.Text.Length == 0
+                || m.AuthorName != messages[i - 1].AuthorName || m.Text != messages[i - 1].Text)
             .ToList();
         List<AIContent> all = messages.SelectMany(m => m.Contents).ToList();
         HashSet<string> calls = [.. all.OfType<FunctionCallContent>().Select(c => c.CallId)];

@@ -9,7 +9,7 @@ namespace AgentCouncil.Agents.Agents;
 /// hard the model should think. <paramref name="Effort"/> is "auto" (send nothing, the model's own
 /// default) or a <see cref="ReasoningEffort"/> name — only reasoning deployments accept the latter.
 /// </summary>
-public sealed record AgentSetup(string Name, int MaxOutputTokens = 400, string Effort = "auto")
+public sealed record AgentSetup(string Name, int MaxOutputTokens = 150, string Effort = "auto")
 {
     /// <summary>The soft instruction that pairs with the hard <see cref="MaxOutputTokens"/> cap.</summary>
     public string Style => MaxOutputTokens switch
@@ -50,9 +50,21 @@ public sealed class CouncilAgents
         This is a live, spoken conversation, not a report. Look at who spoke just before you and react to
         them by name first: agree, tease or push back ("Good one, Skeptic, but...", "Oh, come on,
         Optimistic..."). When that was Your Majesty, answer Your Majesty directly and do what they asked.
-        Sound like a person in a lively meeting: use contractions, no bullet points, no headings, and
-        never announce your own role. When a fact, figure or recent event would settle a point, you may
+        The only names you ever say are other members' and Your Majesty: never say or write your own
+        name, never open with a name tag such as "[Name]" or "Name:" (those tags only mark who spoke),
+        and never refer to yourself in the third person. If the last line was your own, react to the
+        one before it. Sound like a person in a lively meeting: use contractions, no bullet points, no
+        headings, and never announce your own role. When a fact, figure or recent event would settle a point, you may
         search the web first; never search for opinions.
+        """;
+
+    // ASD-STE100 (Simplified Technical English), relaxed for speech: every agent's output follows it.
+    private const string PlainEnglish =
+        """
+        Use plain, simple English that a learner of English can read easily. Write short sentences of
+        20 words or fewer. Put one idea in each sentence. Use common, everyday words. Do not use rare or
+        fancy words, idioms or phrasal verbs (say "start", not "kick off"). Use the active voice and
+        simple tenses. Do not use semicolons or long dashes.
         """;
 
     private readonly IChatClient _chatClient;
@@ -93,7 +105,7 @@ public sealed class CouncilAgents
                         You are the council's Researcher. Search the web, then answer the question you are
                         given with at most 3 concise bullet points of facts, precedents or figures, citing
                         sources and flagging anything uncertain.
-                        """,
+                        """ + "\n" + PlainEnglish,
                     name: ResearcherName,
                     description: "Gathers facts, precedents and figures on a focused question.",
                     tools: [new HostedWebSearchTool()]),
@@ -126,7 +138,7 @@ public sealed class CouncilAgents
                       you wrote.
                     If the user denies a write, do not retry it; ask what to change. Keep chat replies to
                     1-2 sentences; the files carry the detail.
-                    """ + "\n" + Cast(DebaterNames),
+                    """ + "\n" + PlainEnglish + "\n" + Cast(DebaterNames),
             },
             AIContextProviders =
             [
@@ -178,14 +190,23 @@ public sealed class CouncilAgents
     /// <exception cref="ArgumentException"><paramref name="setup"/> names an agent that isn't on the council.</exception>
     public AIAgent CreateDebater(AgentSetup setup, IReadOnlyCollection<string>? seated = null, bool canHandOff = true)
     {
+        VillageCast.Members.TryGetValue(setup.Name, out Villager? villager);
+
         // Personas pass the floor around the table; the Moderator calls on people and hands back to the user.
-        string handOff = !canHandOff ? string.Empty
-            : setup.Name == ModeratorName
+        // In group chat everyone speaks in turn anyway, so the Moderator questions the whole table.
+        string handOff = setup.Name == ModeratorName
+            ? canHandOff
                 ? """
-                  Call on one member by name and call the handoff tool for them. When the floor comes back
-                  to you after a few voices have been heard, sum up the clash in one line and ask Your
-                  Majesty one focused question, without handing off.
+                  Call on one member by name with a pointed question and call the handoff tool for them.
+                  When the floor comes back to you after a few voices have been heard, say in one neutral
+                  line who disagrees with whom, and ask Your Majesty one focused question, without handing off.
                   """
+                : """
+                  Every member answers in turn right after you, so put one pointed question to the whole
+                  table, never to a single member. Once they have all had a say, sum up in one neutral line
+                  who disagrees with whom before your question.
+                  """
+            : !canHandOff ? string.Empty
                 : """
                   Finish every turn by calling a handoff tool: pass the floor to the member you just named,
                   or to the Moderator once a point has gone back and forth a couple of times. Naming someone
@@ -198,8 +219,11 @@ public sealed class CouncilAgents
             ModeratorName => (_chatClient,
                 "Chairs the council debate and decides when to ask the user for input.",
                 """
-                You are the Moderator of a council debating Your Majesty's topic. Frame or sharpen the
-                debate and keep it moving between the members, always by name.
+                You are the Moderator of a council debating Your Majesty's topic. You only direct traffic:
+                never give an opinion, idea, argument, fact or verdict of your own, and never agree or push
+                back (this overrides the reaction rule below). Acknowledge the last speaker by name in a
+                few neutral words, then ask a pointed question that makes the next voice answer what was
+                just said.
                 """),
             OptimisticName => (_cheapClient,
                 "Argues the upside, opportunities and benefits.",
@@ -229,6 +253,8 @@ public sealed class CouncilAgents
                 the coffee) and make dry jokes at the others' expense, especially Optimistic's sunshine
                 and Pragmatic's spreadsheets. Never cruel, always funny, and slip in one genuine worry.
                 """),
+            // The village's neighbours (VillageCast.cs).
+            _ when villager is not null => (_cheapClient, villager.Description, villager.Persona),
             _ => throw new ArgumentException($"'{setup.Name}' is not a council debater.", nameof(setup)),
         };
 
@@ -263,6 +289,8 @@ public sealed class CouncilAgents
             _ => [Compaction(_cheapClient)],
         };
 
+        ReasoningEffort? effort = Enum.TryParse(setup.Effort, ignoreCase: true, out ReasoningEffort parsed) ? parsed : null;
+
         return new ChatClientAgent(client, new ChatClientAgentOptions
         {
             Name = setup.Name,
@@ -270,16 +298,24 @@ public sealed class CouncilAgents
             ChatOptions = new()
             {
                 // The budget is enforced twice: as a prompt rule (so the turn *ends*) and as a hard cap
-                // (so a runaway turn is truncated rather than billed).
+                // (so a runaway turn is truncated rather than billed). Reasoning counts against the cap, so
+                // it gets headroom on top: without it the model thinks through all 150 tokens and says
+                // nothing, and a group chat just moves on to the next silent member.
+                // ponytail: fixed headroom per effort; a long debate at high effort can still run out.
                 Instructions =
-                    $"{persona}\n{Conversation}\n{handOff}\n{Cast(seated ?? DebaterNames)}\n"
-                    + $"Turn length: {setup.Style}. Never exceed {setup.MaxOutputTokens} output tokens.",
-                MaxOutputTokens = setup.MaxOutputTokens,
+                    $"{persona}\n"
+                    + (villager is null ? $"{Conversation}\n{handOff}\n{Cast(seated ?? DebaterNames)}\n" : VillageCast.Rules(setup.Name, seated ?? []))
+                    + $"{PlainEnglish}\nTurn length: {setup.Style}. Never exceed {setup.MaxOutputTokens} output tokens.",
+                MaxOutputTokens = setup.MaxOutputTokens + effort switch
+                {
+                    null or ReasoningEffort.None => 0,
+                    ReasoningEffort.Low => 2_000,
+                    ReasoningEffort.Medium => 6_000,
+                    _ => 16_000,
+                },
 
                 // The summary feeds the UI's reasoning log; non-reasoning deployments reject both, hence "auto" sends neither.
-                Reasoning = Enum.TryParse(setup.Effort, ignoreCase: true, out ReasoningEffort effort)
-                    ? new ReasoningOptions { Effort = effort, Output = ReasoningOutput.Summary }
-                    : null,
+                Reasoning = effort is { } e ? new ReasoningOptions { Effort = e, Output = ReasoningOutput.Summary } : null,
 
                 // Hosted by the Responses API: the model searches on its own, no approval needed.
                 Tools = [new HostedWebSearchTool()],
@@ -301,10 +337,12 @@ public sealed class CouncilAgents
         {
             Instructions =
                 """
-                You are the Moderator chairing the council. Give every member a fair hearing and pick the
-                member whose view the last speaker challenged. Your final answer is a short spoken verdict
-                to Your Majesty, two or three sentences, crediting members by name.
-                """ + "\n" + Cast(seated),
+                You are the Moderator chairing the council. You only direct traffic: never add an opinion,
+                idea, argument or fact of your own. Give every member a fair hearing and pick the member
+                whose view the last speaker challenged, asking them a pointed question about it. Your final
+                answer is a short neutral recap to Your Majesty, two or three sentences, saying which member
+                argued what, by name, without taking a side.
+                """ + "\n" + PlainEnglish + "\n" + Cast(seated),
         },
 
         // Tags the members' lines by name, which the Responses API would otherwise drop.

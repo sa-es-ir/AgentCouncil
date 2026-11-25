@@ -98,6 +98,9 @@ public sealed class CouncilClient(IConfiguration configuration) : IAsyncDisposab
         if (_connection is not null)
         {
             await _connection.DisposeAsync();
+
+            // The client is per circuit, so the next page in the same circuit must be able to connect again.
+            _connection = null;
         }
     }
 }

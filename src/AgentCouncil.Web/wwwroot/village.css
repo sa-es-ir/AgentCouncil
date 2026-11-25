@@ -1,0 +1,346 @@
+/* /village: neighbours making small talk in the lanes. One accent (lantern) marks who's talking right now. */
+
+.village {
+    --v-ink: #26363d;
+    --v-meadow: #8db46f;
+    --v-sand: #e9d9b0;
+    --v-paper: #fffdf6;
+    --v-page: #eef3e8;
+    --v-lantern: #ffc43a;
+    /* The village's cast (VillageCast.cs): one colour each for roofs, clothes and name tags. */
+    --mayor: #6c8cff;
+    --baker: #e8c547;
+    --astronomer: #5aa9c9;
+    --blacksmith: #c8743a;
+    --gravedigger: #8a8fa3;
+    --merchant: #3fbf7f;
+    --elder: #a8835a;
+    --seer: #a08bd6;
+    --bard: #e86a92;
+    --crier: #e8694a;
+    --v-walk: cubic-bezier(.16, 1, .3, 1);
+    min-height: 100vh;
+    padding: 1.25rem clamp(12px, 2.5vw, 32px) 3rem;
+    background: var(--v-page);
+    color: var(--v-ink);
+    font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+}
+
+.village > * { max-width: 1680px; margin-inline: auto; }
+
+.v-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.v-header h1 { margin: 0; font: 400 clamp(1.7rem, 3.4vw, 2.5rem)/1.1 "Young Serif", Georgia, serif; letter-spacing: -.01em; }
+.v-header nav { display: flex; align-items: center; gap: 1.25rem; }
+
+.v-link { color: var(--v-ink); text-underline-offset: 3px; }
+
+.v-btn {
+    min-width: 9.5rem;
+    padding: .65rem 1.3rem; cursor: pointer;
+    border: 2px solid var(--v-ink); border-radius: 12px;
+    background: var(--v-lantern); color: var(--v-ink); font: 700 1rem "Atkinson Hyperlegible", system-ui, sans-serif;
+    box-shadow: 0 3px 0 var(--v-ink);
+}
+.v-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--v-ink); }
+.v-btn:disabled { background: #d9ddd3; cursor: not-allowed; box-shadow: none; }
+.village :is(.v-btn, .v-link, summary):focus-visible { outline: 3px solid var(--v-ink); outline-offset: 3px; }
+
+/* ---- the scene: a 21:9 panorama; positions are % of it, people are sized off its width ---- */
+
+.scene-wrap { overflow-x: auto; border: 3px solid var(--v-ink); border-radius: 20px; }
+.scene {
+    position: relative;
+    min-width: 900px;
+    aspect-ratio: 21 / 9;
+    container-type: inline-size;
+    --v: clamp(9px, 1.55cqi, 26px);
+    overflow: hidden;
+    background: var(--v-meadow);
+}
+
+.land { position: absolute; inset: 0; width: 100%; height: 100%; }
+.road.edge > * { fill: #c9b17d; stroke: #b0965f; stroke-width: 5px; }
+.road.fill > * { fill: var(--v-sand); }
+.yard { fill: #a3c487; }
+
+/* Everything stands with its feet on (--x, --y), and the lower it stands the nearer it is: z-index follows --y. */
+:is(.house, .tree, .well, .villager) {
+    position: absolute;
+    left: calc(var(--x) * 1%);
+    top: calc(var(--y) * 1%);
+    transform: translate(-50%, -100%);
+    z-index: calc(var(--y) * 1 + 10);
+}
+.house { width: calc(var(--w) * 1%); filter: drop-shadow(calc(var(--sun) * .6cqi) .6cqi 0 rgba(38, 54, 61, .18)); }
+.tree { width: 3.6%; }
+.well { width: 5%; filter: drop-shadow(calc(var(--sun) * .5cqi) .5cqi 0 rgba(38, 54, 61, .18)); }
+:is(.house, .tree, .well, .v-body, .kid, .swing, .dog) svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* Each house keeps one thing alive. */
+.house .flag { transform-box: fill-box; transform-origin: left center; animation: v-flag 2.6s ease-in-out infinite; }
+.house .scope { transform-box: fill-box; transform-origin: left bottom; animation: v-scope 7s ease-in-out infinite; }
+.house .smoke circle { transform-box: fill-box; transform-origin: center; animation: v-smoke 3.6s ease-out infinite; opacity: 0; }
+.house .smoke circle:nth-child(2) { animation-delay: 1.2s; }
+.house .smoke circle:nth-child(3) { animation-delay: 2.4s; }
+.house .rain path { animation: v-rain .9s linear infinite; }
+.house .rain path:nth-child(2) { animation-delay: .35s; }
+.house .rain path:nth-child(3) { animation-delay: .15s; }
+.house .rain path:nth-child(4) { animation-delay: .6s; }
+.house .bell { transform-box: fill-box; transform-origin: 50% 0; animation: v-bell 2.8s ease-in-out infinite; }
+.house .notes > g { animation: v-note 3.2s ease-out infinite; opacity: 0; }
+.house .notes > g:nth-child(2) { animation-delay: 1.6s; }
+.house :is(.twinkle, .orb) { animation: v-twinkle 2.4s ease-in-out infinite; }
+.house .coin { transform-box: fill-box; transform-origin: 50% 0; animation: v-bell 4s ease-in-out infinite; }
+.villager .orb { animation: v-twinkle 1.8s ease-in-out infinite; }
+
+@keyframes v-bell { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(14deg); } 80% { transform: rotate(-12deg); } 90% { transform: rotate(6deg); } }
+@keyframes v-note { 0% { opacity: 0; transform: translate(0, 6px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -14px); } }
+@keyframes v-twinkle { 50% { opacity: .45; } }
+@keyframes v-flag { 50% { transform: scaleX(.78) skewY(4deg); } }
+@keyframes v-scope { 0%, 100% { transform: rotate(0); } 45% { transform: rotate(-9deg); } 70% { transform: rotate(4deg); } }
+@keyframes v-smoke { 0% { opacity: .9; transform: translate(0, 0) scale(.6); } 100% { opacity: 0; transform: translate(10px, -26px) scale(1.8); } }
+@keyframes v-rain { from { transform: translateY(0); opacity: 1; } to { transform: translateY(16px); opacity: 0; } }
+
+/* ---- the playground, back right: children who only play. Every loop here is CSS. ---- */
+
+.play { position: absolute; left: 70%; top: 7%; width: 28%; height: 23%; z-index: 38; }
+.play .leg, .play .arm, .dog .tail { transform-box: fill-box; transform-origin: 50% 0; }
+.kid { position: absolute; width: calc(var(--v) * 1.9); }
+
+/* Two children toss a ball back and forth. */
+.kid.toss-a { left: 6%; bottom: 40%; }
+.kid.toss-b { left: 30%; bottom: 40%; transform: scaleX(-1); }
+.kid:is(.toss-a, .toss-b) .arm-r { animation: v-throw 2.8s ease-in-out infinite; }
+.kid.toss-b .arm-r { animation-delay: -1.4s; }
+.ball { position: absolute; left: 13%; bottom: calc(40% + var(--v) * 1.7); width: calc(var(--v) * .5); aspect-ratio: 1; animation: v-toss-x 1.4s ease-in-out infinite alternate; }
+.ball i { display: block; width: 100%; height: 100%; border-radius: 50%; background: #e8694a; border: 2px solid var(--v-ink); animation: v-toss-y 1.4s infinite; }
+@keyframes v-toss-x { to { left: 28.5%; } }
+@keyframes v-toss-y { 0%, 100% { transform: translateY(0); animation-timing-function: cubic-bezier(.3, .8, .6, 1); } 50% { transform: translateY(calc(var(--v) * -1.8)); animation-timing-function: cubic-bezier(.4, 0, .7, .2); } }
+@keyframes v-throw { 0%, 100% { transform: rotate(-20deg); } 15% { transform: rotate(-150deg); } 30% { transform: rotate(-60deg); } }
+
+/* One on the swing. */
+.swing { position: absolute; left: 70%; bottom: 30%; width: calc(var(--v) * 3.4); }
+.swing .swing-seat { transform-box: view-box; transform-origin: 40px 7px; animation: v-swing 2.4s ease-in-out infinite alternate; }
+@keyframes v-swing { from { transform: rotate(24deg); } to { transform: rotate(-24deg); } }
+
+/* And one chasing the dog along the front of the yard, turning round at each end. */
+.chase { position: absolute; left: 6%; bottom: -4%; width: calc(var(--v) * 3.4); animation: v-chase 6s ease-in-out infinite alternate; }
+.chase-turn { display: flex; align-items: flex-end; gap: calc(var(--v) * .5); animation: v-turn 12s step-end infinite; }
+.chase .kid { position: static; }
+.dog { width: calc(var(--v) * 1.5); }
+.chase :is(.leg-l, .arm-r) { animation: v-swing-a .32s ease-in-out infinite; }
+.chase :is(.leg-r, .arm-l) { animation: v-swing-a .32s ease-in-out infinite reverse; }
+.dog .tail { transform-origin: 100% 100%; animation: v-wag .25s ease-in-out infinite alternate; }
+@keyframes v-chase { to { left: 74%; } }
+@keyframes v-turn { 0% { transform: none; } 50% { transform: scaleX(-1); } }
+@keyframes v-wag { to { transform: rotate(-25deg); } }
+
+/* ---- grown-ups: walks are a transition on left/top, --t long (the page sets it from the distance) ---- */
+
+.villager {
+    display: grid; justify-items: center;
+    transform-origin: bottom center;
+    /* z-index rides along with top, so a walker passes behind a house until they are really in front of it. */
+    transition: left var(--t, 0ms) linear, top var(--t, 0ms) linear, z-index var(--t, 0ms) linear, transform .6s var(--v-walk), opacity .8s;
+}
+/* In a conversation, step to the front at once. */
+.villager:is(.speaking, .listening) { transition: left var(--t, 0ms) linear, top var(--t, 0ms) linear, transform .6s var(--v-walk), opacity .8s; }
+/* At night each villager goes in through their own door. */
+.villager.indoors { opacity: 0; transform: translate(-50%, -100%) scale(.85); }
+
+/* Nearer the front, a little bigger. */
+.v-body { display: block; width: calc(var(--v) * 2.2 * (.72 + var(--y) / 250)); transition: transform .3s var(--v-walk); }
+.villager.face-left .v-body { transform: scaleX(-1); }
+.v-body svg { transform-origin: bottom center; animation: v-breathe 3.2s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -.6s); }
+.v-shadow {
+    position: absolute; left: 50%; bottom: calc(var(--v) * -.2); z-index: -1;
+    /* The sun moves through the day (--sun, by data-hour), and the shadow falls the other way. */
+    width: calc(var(--v) * (1.5 + .3 * max(var(--sun), -1 * var(--sun)))); height: calc(var(--v) * .5);
+    transform: translateX(calc(-50% + var(--sun) * var(--v) * .45));
+    border-radius: 50%; background: rgba(38, 54, 61, .25);
+}
+
+.leg, .arm { transform-box: fill-box; transform-origin: 50% 0; }
+.villager:is(.elder, .gravedigger) .arm-r { animation: none !important; }
+
+/* walking: legs and arms swing for as long as the walk. talking: the free hand rises and falls, the head bobs.
+   listening: a slow nod toward the speaker. Everyone else stands still. */
+/* Short quick steps with a bounce on each one, so the feet keep up with the ground they cover. */
+.villager.walking :is(.leg-l, .arm-r) { animation: v-swing-a .44s ease-in-out infinite; }
+.villager.walking :is(.leg-r, .arm-l) { animation: v-swing-a .44s ease-in-out infinite reverse; }
+.villager.walking .v-body { animation: v-step .11s ease-in-out infinite alternate; }
+.villager.talking .arm-r { animation: var(--gesture, v-gesture 1.7s ease-in-out infinite); }
+.village .mouth { opacity: 0; }
+.villager.talking .mouth { animation: v-mouth .26s step-end infinite; }
+.v-body .eyes { transform-box: fill-box; transform-origin: center; animation: v-blink 5s infinite; animation-delay: calc(var(--i, 0) * -1.3s); }
+
+/* Everyone talks with their own hands. The Elder and the Gravedigger lean on cane and shovel, so they use the other hand or the whole body. */
+.villager.mayor { --gesture: v-orate 2.6s ease-in-out infinite; }
+.villager.baker { --gesture: v-baton 1.1s ease-in-out infinite; }
+.villager.astronomer { --gesture: v-point 2.8s ease-in-out infinite; }
+.villager.blacksmith { --gesture: v-strike .9s linear infinite; }
+.villager.merchant { --gesture: v-count .5s ease-in-out infinite alternate; }
+.villager.seer { --gesture: v-conjure 2.2s ease-in-out infinite; }
+.villager.bard { --gesture: v-strum .34s ease-in-out infinite alternate; }
+.villager.crier { --gesture: v-ring .28s ease-in-out infinite alternate; }
+.villager.talking.seer .arm-l { animation: v-conjure 2.2s ease-in-out -1.1s infinite; }
+.villager.talking.elder .arm-l { animation: v-wag-finger .7s ease-in-out infinite alternate; }
+.villager.talking.gravedigger .v-body svg { animation: v-sway 2.6s ease-in-out infinite; }
+.villager.talking .arm-l { animation: v-gesture-back 2.3s ease-in-out infinite; }
+.villager.talking .v-body svg { animation: v-bob .9s ease-in-out infinite; }
+.villager.listening .v-body svg { animation: v-nod 2.4s ease-in-out infinite; }
+
+@keyframes v-swing-a { 25% { transform: rotate(22deg); } 75% { transform: rotate(-22deg); } }
+@keyframes v-step { to { translate: 0 -5%; } }
+@keyframes v-blink { 0%, 95%, 100% { transform: none; } 97% { transform: scaleY(.1); } }
+@keyframes v-mouth { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes v-orate { 0%, 100% { transform: rotate(-10deg); } 18% { transform: rotate(-155deg); } 40% { transform: rotate(-138deg); } 55% { transform: rotate(-152deg); } 75% { transform: rotate(-70deg); } }
+@keyframes v-baton { 0%, 100% { transform: rotate(-25deg); } 25% { transform: rotate(-80deg); } 50% { transform: rotate(-40deg); } 75% { transform: rotate(-95deg); } }
+@keyframes v-point { 0%, 100% { transform: rotate(-10deg); } 15%, 85% { transform: rotate(-160deg); } 40% { transform: rotate(-148deg); } 55% { transform: rotate(-168deg); } }
+@keyframes v-strike { 0%, 100% { transform: rotate(-15deg); } 45% { transform: rotate(-140deg); animation-timing-function: cubic-bezier(.6, 0, 1, .6); } 58% { transform: rotate(-8deg); } }
+@keyframes v-count { from { transform: rotate(-32deg); } to { transform: rotate(-50deg); } }
+@keyframes v-conjure { 0%, 100% { transform: rotate(-70deg); } 25% { transform: rotate(-95deg); } 50% { transform: rotate(-112deg); } 75% { transform: rotate(-85deg); } }
+@keyframes v-strum { from { transform: rotate(-20deg); } to { transform: rotate(-40deg); } }
+@keyframes v-ring { from { transform: rotate(-112deg); } to { transform: rotate(-142deg); } }
+@keyframes v-wag-finger { from { transform: rotate(-68deg); } to { transform: rotate(-96deg); } }
+@keyframes v-sway { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+@keyframes v-breathe { 50% { transform: scaleY(1.025); } }
+@keyframes v-gesture { 0%, 100% { transform: rotate(-8deg); } 22% { transform: rotate(-62deg); } 40% { transform: rotate(-38deg); } 62% { transform: rotate(-70deg); } 82% { transform: rotate(-20deg); } }
+@keyframes v-gesture-back { 0%, 100% { transform: rotate(4deg); } 50% { transform: rotate(-34deg); } }
+@keyframes v-bob { 50% { transform: translateY(-2%) rotate(-1.5deg); } }
+@keyframes v-nod { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(3deg); } 80% { transform: rotate(-.5deg); } 90% { transform: rotate(2.5deg); } }
+
+/* Names only on the people in the conversation, so the lanes stay uncluttered. */
+.v-name {
+    position: absolute; top: calc(100% + 2px); left: 50%;
+    transform: translateX(-50%);
+    padding: 1px 7px;
+    border-radius: 999px; background: var(--v-paper); border: 2px solid var(--v-ink);
+    font-size: max(11px, calc(var(--v) * .5)); font-weight: 700; white-space: nowrap;
+    opacity: 0; transition: opacity .3s;
+}
+.villager:is(.speaking, .listening) .v-name { opacity: 1; }
+
+.v-glow {
+    position: absolute; left: 50%; bottom: 0;
+    width: calc(var(--v) * 3.2); height: calc(var(--v) * 1);
+    transform: translate(-50%, 50%);
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--v-lantern), transparent);
+    opacity: 0; transition: opacity .4s;
+    z-index: -1;
+}
+.villager.speaking { transform: translate(-50%, -100%) scale(1.06); z-index: 150; }
+.villager.listening { z-index: 149; }
+.villager.speaking .v-glow { opacity: .95; animation: v-glow 1.6s ease-in-out infinite; }
+@keyframes v-glow { 50% { opacity: .55; } }
+
+/* ---- the speech bubble over whoever's talking (under them near the top of the scene) ---- */
+
+.bubble {
+    position: absolute;
+    left: calc(var(--cx) * 1%);
+    top: calc(var(--y) * 1%);
+    width: 26%;
+    transform: translate(-50%, calc(-100% - var(--v) * 4.4));
+    transform-origin: calc(var(--tail) * 1%) 100%;
+    z-index: 200;
+    animation: v-pop .45s var(--v-walk) both;
+    padding: .6rem .85rem .7rem;
+    background: var(--v-paper);
+    border: 3px solid var(--v-ink);
+    border-radius: 16px;
+    box-shadow: 0 4px 0 rgba(38, 54, 61, .18);
+}
+.bubble.below { transform: translate(-50%, calc(var(--v) * 1.7)); transform-origin: calc(var(--tail) * 1%) 0; }
+.bubble::after {
+    content: ""; position: absolute; top: 100%; left: calc(var(--tail) * 1%);
+    width: 16px; height: 16px; margin: -8px 0 0 -8px;
+    background: var(--v-paper);
+    border-right: 3px solid var(--v-ink); border-bottom: 3px solid var(--v-ink);
+    transform: rotate(45deg);
+}
+.bubble.below::after { top: auto; bottom: 100%; margin: 0 0 -8px -8px; transform: rotate(225deg); }
+@keyframes v-pop { from { opacity: 0; scale: .6; } }
+.bubble-who { font: 400 .95rem/1 "Young Serif", Georgia, serif; color: var(--c-text); }
+.bubble p { margin: .3rem 0 0; font-size: clamp(13px, 1.05cqi, 17px); line-height: 1.4; overflow-wrap: anywhere; }
+
+/* Name colours darkened from the cast colours so they read on paper. */
+.village .mayor { --c-text: #3f5bb8; }
+.village .baker { --c-text: #8a6d0a; }
+.village .astronomer { --c-text: #1f6d8c; }
+.village .blacksmith { --c-text: #9a4f1c; }
+.village .gravedigger { --c-text: #4f5468; }
+.village .merchant { --c-text: #23845a; }
+.village .elder { --c-text: #6e4f2c; }
+.village .seer { --c-text: #6b55a8; }
+.village .bard { --c-text: #b23a62; }
+.village .crier { --c-text: #b8452a; }
+
+/* ---- the time of day: one step per subject (Village.razor's Hour), dawn before the day starts, night after the last ---- */
+
+@property --sun { syntax: "<number>"; inherits: true; initial-value: -1; }
+.scene { --sun: -1; transition: --sun 6s ease-in-out; }
+.scene[data-hour="0"] { --sun: 1.6; }
+.scene[data-hour="1"] { --sun: 1.1; }
+.scene[data-hour="2"] { --sun: .5; }
+.scene[data-hour="3"] { --sun: 0; }
+.scene[data-hour="4"] { --sun: -.6; }
+.scene[data-hour="5"] { --sun: -1.4; }
+
+/* One wash over the whole scene, multiplied in: rose at dawn, clear at noon, amber at dusk, deep blue at night. */
+.light { position: absolute; inset: 0; z-index: 185; pointer-events: none; mix-blend-mode: multiply; background: #fff; transition: background-color 6s ease-in-out; }
+.scene[data-hour="0"] .light { background: #fde2dc; }
+.scene[data-hour="1"] .light { background: #fff0da; }
+.scene[data-hour="2"] .light { background: #fffaf0; }
+.scene[data-hour="4"] .light { background: #ffe7c2; }
+.scene[data-hour="5"] .light { background: #f9cfae; }
+.scene[data-hour="6"] .light { background: #4d5c9c; }
+
+/* A warm glow over each house whose owner has gone in for the night, screened over the blue. */
+.lamp {
+    position: absolute; left: calc(var(--x) * 1%); top: calc(var(--y) * 1%); z-index: 186;
+    width: calc(var(--w) * 1.15%); aspect-ratio: 1; translate: -50% -50%;
+    border-radius: 50%; pointer-events: none; mix-blend-mode: screen;
+    background: radial-gradient(closest-side, rgba(255, 214, 120, .85), rgba(255, 170, 70, .3) 55%, transparent);
+    opacity: 0; transition: opacity 1.5s;
+}
+.lamp.lit { opacity: 1; animation: v-flicker 3.4s ease-in-out infinite; }
+@keyframes v-flicker { 50% { opacity: .8; } }
+
+/* The children go home at night too, and the sign comes down. */
+.play, .v-topic { transition: opacity 2s; }
+.scene[data-hour="6"] :is(.play, .v-topic) { opacity: 0; }
+
+/* The current subject, pinned at the top of the scene: under the speech bubble, over everything else. */
+.v-topic {
+    position: absolute; top: 2%; left: 50%; transform: translateX(-50%); z-index: 190;
+    max-width: 60%; margin: 0; padding: .35rem 1rem;
+    border: 2px solid var(--v-ink); border-radius: 10px; background: var(--v-paper);
+    box-shadow: 0 3px 0 var(--v-ink);
+    font: 400 clamp(.85rem, 1.2cqi, 1.15rem)/1.3 "Young Serif", Georgia, serif; text-align: center;
+}
+
+/* ---- under the scene: what's happening, and everything overheard ---- */
+
+.v-status { margin: .9rem auto 0; font: 400 clamp(1.05rem, 1.6vw, 1.3rem)/1.4 "Young Serif", Georgia, serif; }
+
+.overheard { margin-top: .75rem; }
+.overheard summary { cursor: pointer; width: fit-content; text-decoration: underline; text-underline-offset: 3px; }
+.chronicle {
+    max-width: 70ch; max-height: 50vh; overflow-y: auto;
+    display: flex; flex-direction: column-reverse; gap: .9rem;
+    list-style: none; margin: .75rem 0 0; padding: 0 .35rem 0 0;
+}
+.line { margin: 0; }
+.line-who { display: block; font: 400 .95rem/1.4 "Young Serif", Georgia, serif; color: var(--c-text, var(--v-ink)); }
+.line-text { line-height: 1.5; overflow-wrap: anywhere; }
+.line-text > :first-child { margin-top: 0; }
+.line-text > :last-child { margin-bottom: 0; }
+.line.turn { padding-top: .6rem; border-top: 2px solid var(--v-ink); font-style: italic; }
+.line.live .line-text > :last-child::after { content: "▍"; color: var(--c-text, var(--v-ink)); animation: v-caret 1s steps(2) infinite; }
+@keyframes v-caret { 50% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .village *, .village *::before, .village *::after { animation: none !important; transition-duration: 0s !important; }
+}

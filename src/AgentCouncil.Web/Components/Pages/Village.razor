@@ -1,0 +1,684 @@
+@page "/village"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject CouncilClient Client
+@using System.Globalization
+@using Markdig
+
+<PageTitle>Council Village</PageTitle>
+<HeadContent>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Young+Serif&display=swap" />
+    <link rel="stylesheet" href="@Assets["village.css"]" />
+</HeadContent>
+
+<div class="village">
+    <header class="v-header">
+        <h1>Council Village</h1>
+        <nav>
+            <button type="button" class="v-btn" disabled="@(!Client.IsConnected)" @onclick="ToggleAsync">@(!_started ? "Start the day" : Night ? "Start a new day" : _paused ? "Carry on" : "Pause")</button>
+            <a class="v-link" href="/">Round table view</a>
+        </nav>
+    </header>
+
+    @* Wider than tall: on a phone the panorama scrolls sideways rather than squashing. *@
+    <div class="scene-wrap">
+        <div class="scene" data-hour="@Hour" aria-hidden="true">
+            @if (_subject is not null)
+            {
+                <p class="v-topic">Today's talk: @_subject</p>
+            }
+            <svg class="land" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <defs>
+                    <linearGradient id="v-edge" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stop-color="#76a05d" />
+                        <stop offset=".2" stop-color="var(--v-meadow)" />
+                    </linearGradient>
+                </defs>
+                <rect width="100" height="100" fill="url(#v-edge)" />
+                <g fill="#9cc07e" opacity=".5">
+                    <ellipse cx="8" cy="46" rx="7" ry="5" /><ellipse cx="88" cy="47" rx="8" ry="5" /><ellipse cx="50" cy="80" rx="9" ry="5" />
+                </g>
+                <ellipse class="yard" cx="84" cy="21" rx="15" ry="9" />
+                @* The roads twice: outlined first, then filled, so crossings merge into one surface. *@
+                @foreach (var pass in new[] { "edge", "fill" })
+                {
+                    <g class="road @pass">
+                        <rect x="-2" y="30" width="104" height="7" rx="2" vector-effect="non-scaling-stroke" />
+                        <rect x="-2" y="62" width="104" height="7.5" rx="2" vector-effect="non-scaling-stroke" />
+                        <rect x="-2" y="94" width="104" height="8" rx="2" vector-effect="non-scaling-stroke" />
+                        <ellipse cx="50" cy="50" rx="11" ry="14" vector-effect="non-scaling-stroke" />
+                        <rect x="34" y="68" width="1.6" height="27" vector-effect="non-scaling-stroke" />
+                        <rect x="64.4" y="68" width="1.6" height="27" vector-effect="non-scaling-stroke" />
+                    </g>
+                }
+                @foreach (var (fx, fy, c) in Flowers)
+                {
+                    <ellipse cx="@F(fx)" cy="@F(fy)" rx=".4" ry=".93" fill="@c" />
+                }
+            </svg>
+
+            @foreach (var (x, y) in Trees)
+            {
+                <span class="tree" style="--x:@F(x); --y:@F(y)">@((MarkupString)VillageArt.Tree)</span>
+            }
+
+            <span class="well" style="--x:50; --y:50">@((MarkupString)VillageArt.Well)</span>
+
+            @foreach (var (name, x, y, w, svg) in Houses)
+            {
+                <span @key="name" class="house @VillageCast.Meta(name).Css" style="--x:@F(x); --y:@F(y); --w:@F(w)">@((MarkupString)svg)</span>
+            }
+
+            @* The children play on their own and never join the talk: pure CSS loops. *@
+            <div class="play">
+                <span class="kid toss-a">@((MarkupString)VillageArt.Kids[0])</span>
+                <span class="ball"><i></i></span>
+                <span class="kid toss-b">@((MarkupString)VillageArt.Kids[1])</span>
+                <span class="swing">@((MarkupString)VillageArt.Swing)</span>
+                <span class="chase"><span class="chase-turn"><span class="kid">@((MarkupString)VillageArt.Kids[2])</span><span class="dog">@((MarkupString)VillageArt.Dog)</span></span></span>
+            </div>
+
+            @foreach (var name in Order)
+            {
+                var m = VillageCast.Meta(name);
+                var (vx, vy) = _pos[name];
+                <div @key="@($"v-{name}")" class="villager @m.Css @Acting(name) @(FacesLeft(name) ? "face-left" : "") @(Indoors(name) ? "indoors" : "")"
+                     style="--x:@F(vx); --y:@F(vy); --t:@(_dur[name])ms; --i:@Array.IndexOf(Order, name)">
+                    <span class="v-shadow"></span>
+                    <span class="v-glow"></span>
+                    <span class="v-body">@((MarkupString)VillageArt.People[name])</span>
+                    <span class="v-name">@m.Title</span>
+                </div>
+            }
+
+            @* The time of day tints the whole scene (village.css, by data-hour); at night a lamp comes on in every house whose owner is in. *@
+            <div class="light"></div>
+            @foreach (var (name, x, y, w, _) in Houses)
+            {
+                <span @key="@($"lamp-{name}")" class="lamp @(Indoors(name) ? "lit" : "")" style="--x:@F(x); --y:@F(y - (w * .55)); --w:@F(w)"></span>
+            }
+
+            @if (Bubble is { } b)
+            {
+                <div @key="_cursor" class="bubble @b.Css @(b.Below ? "below" : "")" style="@b.Style">
+                    <span class="bubble-who">@b.Who</span>
+                    <p>@b.Text</p>
+                </div>
+            }
+        </div>
+    </div>
+
+    <p class="v-status" role="status">@Status</p>
+
+    @if (_transcript.Count > 0)
+    {
+        <details class="overheard">
+            <summary>Everything overheard so far</summary>
+            @* Newest first in the DOM; column-reverse shows it oldest-first and keeps the scroll pinned to the latest line. *@
+            <ol class="chronicle">
+                @for (var i = Math.Min(_cursor, _transcript.Count - 1); i >= 0; i--)
+                {
+                    var entry = _transcript[i];
+                    if (entry.Agent == Subject)
+                    {
+                        <li @key="i" class="line turn">The talk turns to @entry.Text.</li>
+                        continue;
+                    }
+
+                    var live = i == _cursor;
+                    if (live && !Speaking)
+                    {
+                        continue;
+                    }
+
+                    var m = VillageCast.Meta(entry.Agent);
+                    <li @key="i" class="line @m.Css @(live ? "live" : "")">
+                        <span class="line-who">@m.Icon @m.Title</span>
+                        <div class="line-text">@Render(live ? entry.Text[..Math.Min(_reveal, entry.Text.Length)] : entry.Text)</div>
+                    </li>
+                }
+            </ol>
+        </details>
+    }
+</div>
+
+@code {
+    // Small talk: one sentence each.
+    private const int Budget = 150;
+
+    // The subject lines in the transcript: the page's own, never a villager's.
+    private const string Subject = "You";
+
+    // After this many subjects the village pauses by itself, so a forgotten tab doesn't keep calling the model.
+    private const int SubjectsPerDay = 5;
+
+    // Playback pacing. The hub streams a whole round in seconds; the village plays it back at human speed:
+    // the speaker walks over, talks (the text types out), holds for a beat, then the next one goes.
+    private const int TickMs = 40;
+    private const int CharsPerTick = 1; // 25 chars/s, close to reading speed
+    private const int HoldMs = 2400;
+    private const int HoldMsPerChar = 25; // longer lines stay up longer so they can be read to the end
+    private const int BreatherMs = 6000;
+
+    // Milliseconds per % of the scene's width walked: a stroll, not a march.
+    private const double Pace = 110;
+
+    private static readonly (string Name, double X, double Y, double W, string Svg)[] Houses = VillageArt.Houses;
+
+    // The round-robin order: the Crier brings up the subject and the Bard rhymes it up last.
+    private static readonly string[] Order =
+        ["Crier", "Baker", "Gravedigger", "Merchant", "Astronomer", "Elder", "Seer", "Blacksmith", "Mayor", "Bard"];
+
+    // What the lanes talk about; one at random per round, never the same twice running.
+    private static readonly string[] Subjects =
+    [
+        "the weather, and whether it'll rain on market day",
+        "trading at the market this week",
+        "how the village's coffers are doing",
+        "the Mayor's plan for a new tax",
+        "the price of eggs, flour and cheese",
+        "the harvest so far",
+        "the new road to the next town",
+        "the summer festival",
+        "a stranger who rode through last night",
+        "who keeps leaving the well bucket down",
+    ];
+
+    // Where grown-ups stop for a chat: round the well, along the three lanes and the two footpaths.
+    // The playground (back right) is the children's.
+    private static readonly (double X, double Y)[] Spots =
+    [
+        (42, 54), (58, 54), (45, 59), (55, 59), (40, 46), (60, 46),
+        (5, 35), (20, 35), (28, 35), (45, 35), (53, 35), (66, 35),
+        (4, 67), (16, 67), (33, 67), (42, 67), (58, 67), (67, 67), (84, 67), (96, 67),
+        (6, 95), (33, 95), (40, 95), (60, 95), (67, 95), (94, 95),
+        (35, 81), (65, 81),
+    ];
+
+    private static readonly (double X, double Y)[] Trees =
+        [(3, 29), (24, 28), (48, 28), (17, 50), (34, 52), (66, 52), (83.5, 50), (30, 92), (70, 92), (98, 92)];
+
+    private static readonly (double X, double Y, string Color)[] Flowers =
+        [.. new (double X, double Y)[]
+        {
+            (6, 85), (7, 87), (11, 84), (42, 82), (43, 85), (57, 83), (58, 80), (89, 85), (91, 83), (93, 86),
+            (14, 44), (30, 44), (70, 45), (86, 43), (40, 22), (41, 24), (66, 20),
+        }.Select((p, i) => (p.X, p.Y, (i % 3) switch { 0 => "#F29BB5", 1 => "#FFD95A", _ => "#FFFDF6" }))];
+
+    // HTML is disabled so raw markup coming back from the model is rendered as text, not injected.
+    private static readonly MarkdownPipeline Markdown =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().DisableHtml().Build();
+
+    private readonly List<TranscriptEntry> _transcript = [];
+    private readonly CancellationTokenSource _stop = new();
+
+    // Where everyone is headed (CSS walks them there over _dur ms), when they arrive, and which way they last walked.
+    private readonly Dictionary<string, (double X, double Y)> _pos = Order.ToDictionary(n => n, Doorstep);
+    private readonly Dictionary<string, int> _dur = Order.ToDictionary(n => n, _ => 0);
+    private readonly Dictionary<string, long> _arrive = [];
+    private readonly HashSet<string> _faceLeft = [];
+
+    private bool _started;
+    private bool _paused;
+    private bool _roundOver = true;
+    private int _subjects;
+    private string? _subject;
+    private string? _error;
+
+    // Playback: _transcript is what the hub sent, _cursor the line the village is acting out now.
+    private int _cursor;
+    private int _reveal;
+    private Phase _phase = Phase.Wait;
+    private long _phaseAt;
+    private bool _turnOver;
+    private long _caughtUpAt;
+    private long _pausedAt; // when the user pressed Pause, so Carry on resumes the line's hold where it was
+
+    private long _now;
+    private long _nextWander;
+    private bool _anyWalking;
+
+    // The neighbour who speaks next; they wander over to listen while the current speaker talks.
+    private string? _joiner;
+
+    private enum Phase
+    {
+        Wait,
+        Walk,
+        Talk,
+        Hold,
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _stop.CancelAsync();
+        Client.AgentDelta -= OnAgentDelta;
+        Client.AwaitUserInput -= OnAwaitUserInput;
+        Client.CouncilError -= OnCouncilError;
+        await Client.DisposeAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Half the village is already out and about when you arrive.
+        foreach (var name in Order.Where((_, i) => i % 2 == 0))
+        {
+            _pos[name] = FreeSpot(name);
+        }
+
+        Client.AgentDelta += OnAgentDelta;
+        Client.AwaitUserInput += OnAwaitUserInput;
+        Client.CouncilError += OnCouncilError;
+        await Client.ConnectAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ = PlayAsync();
+        }
+    }
+
+    private sealed record Speech(string Who, string Text, string Css, string Style, bool Below);
+
+    private bool Speaking => _phase is Phase.Talk or Phase.Hold;
+
+    /// <summary>The day's talk has run out (SubjectsPerDay): night until the user starts a new day.</summary>
+    private bool Night => _started && _subjects > SubjectsPerDay;
+
+    /// <summary>The time of day, one step per subject: 0 dawn (before the day starts), 1-5 morning to dusk, 6 night.</summary>
+    private int Hour => !_started ? 0 : Math.Min(_subjects, SubjectsPerDay + 1);
+
+    private bool Indoors(string name) => Night && !Walking(name) && Distance(_pos[name], Doorstep(name)) < 1; // 1: Move clamps the back row's doorsteps by a hair
+
+    /// <summary>Playback has shown everything the hub sent for the round, and the round is over.</summary>
+    private bool CaughtUp => _cursor >= _transcript.Count && _turnOver;
+
+    /// <summary>The neighbour whose line is being played back, if any.</summary>
+    private string? Speaker => _cursor < _transcript.Count && _pos.ContainsKey(_transcript[_cursor].Agent) ? _transcript[_cursor].Agent : null;
+
+    /// <summary>The neighbour the speaker walks up to: whoever spoke just before, when that's someone else in the village.</summary>
+    private string? Partner => Speaker is { } s && _cursor > 0 && _transcript[_cursor - 1].Agent is var a && a != s && _pos.ContainsKey(a) ? a : null;
+
+    private string Status
+    {
+        get
+        {
+            if (_error is not null)
+            {
+                return $"The talk stopped: {_error}. Press Carry on to try again.";
+            }
+
+            if (!_started)
+            {
+                return "Ten neighbours, one village. Start the day and listen in.";
+            }
+
+            if (Speaker is not { } s)
+            {
+                return Night ? "Night falls and the village goes to sleep. Start a new day to hear more."
+                    : _paused && CaughtUp ? "The village is taking a breather."
+                    : CaughtUp ? "The talk drifts on…"
+                    : $"Word is going round about {_subject}…";
+            }
+
+            var who = VillageCast.Meta(s).Title;
+            return (Partner, _phase) switch
+            {
+                (null, Phase.Walk) => $"The {who} heads to the well with news about {_subject}.",
+                (null, _) => $"The {who} brings up {_subject}.",
+                ({ } p, Phase.Walk) => $"The {who} wanders over to the {VillageCast.Meta(p).Title}.",
+                ({ } p, _) => $"The {who} is chatting with the {VillageCast.Meta(p).Title} about {_subject}.",
+            };
+        }
+    }
+
+    /// <summary>The line being spoken, over the speaker's head (under it near the top of the scene), kept inside the scene.</summary>
+    private Speech? Bubble
+    {
+        get
+        {
+            if (!Speaking || Speaker is not { } s || _reveal == 0)
+            {
+                return null;
+            }
+
+            var (x, y) = _pos[s];
+            var text = _transcript[_cursor].Text[.._reveal].Trim();
+            text = text.Length > 240 ? "…" + text[^239..] : text;
+            var (cx, tail) = Anchor(x, 26);
+            var m = VillageCast.Meta(s);
+            return new Speech(m.Title, text, m.Css, $"--y:{F(y)}; --cx:{F(cx)}; --tail:{F(tail)}", y < 50);
+        }
+    }
+
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static MarkupString Render(string text) => (MarkupString)Markdig.Markdown.ToHtml(text, Markdown);
+
+    // Centre of a bubble "width" % wide under speaker x, clamped into the scene, and where its tail then sits (% of the bubble).
+    private static (double Cx, double Tail) Anchor(double x, double width)
+    {
+        var cx = Math.Clamp(x, (width / 2) + 1, 99 - (width / 2));
+        return (cx, Math.Clamp(50 + ((x - cx) / width * 100), 8, 92));
+    }
+
+    private static (double X, double Y) Doorstep(string name)
+    {
+        var house = Array.Find(Houses, h => h.Name == name);
+        return (house.X, Math.Min(house.Y + 3, 95));
+    }
+
+    // The scene is 21:9, so a % of height is a much shorter walk than a % of width.
+    private static double Distance((double X, double Y) a, (double X, double Y) b) =>
+        Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow((a.Y - b.Y) * 9 / 21, 2));
+
+    private bool Walking(string name) => _arrive.TryGetValue(name, out var t) && _now < t;
+
+    /// <summary>Sends someone walking to a spot, nudged aside if a neighbour already stands there.</summary>
+    private void Move(string name, (double X, double Y) to)
+    {
+        to = (Math.Clamp(to.X, 2, 98), Math.Clamp(to.Y, 34, 95)); // 95: room for the name tag under the feet
+        foreach (var other in Order.Where(o => o != name && Distance(_pos[o], to) < 2.5))
+        {
+            to = (Math.Clamp(to.X + (to.X > _pos[other].X ? 2.5 : -2.5), 2, 98), to.Y);
+        }
+
+        var from = _pos[name];
+        var ms = (int)Math.Min(Distance(from, to) * Pace, 7000);
+        if (ms < 200)
+        {
+            return;
+        }
+
+        if (to.X < from.X - .3)
+        {
+            _faceLeft.Add(name);
+        }
+        else if (to.X > from.X + .3)
+        {
+            _faceLeft.Remove(name);
+        }
+
+        _pos[name] = to;
+        _dur[name] = ms;
+        _arrive[name] = _now + ms;
+    }
+
+    /// <summary>A random chatting spot with nobody near it, away from the conversation under way.</summary>
+    private (double X, double Y) FreeSpot(string name)
+    {
+        var talking = new[] { Speaker, Partner, _joiner }.OfType<string>().Where(n => n != name).Select(n => _pos[n]).ToList();
+        var free = Spots.Where(s => Order.All(o => o == name || Distance(_pos[o], s) > 5) && talking.All(t => Distance(t, s) > 12)).ToList();
+        var pool = free.Count > 0 ? free : [.. Spots];
+        return pool[Random.Shared.Next(pool.Count)];
+    }
+
+    /// <summary>A line is about to be spoken: the speaker walks up to whoever they answer, and the next one wanders over.</summary>
+    private void Stage(string speaker)
+    {
+        var next = Order[(Array.IndexOf(Order, speaker) + 1) % Order.Length];
+        if (Partner is not { } partner)
+        {
+            // A new subject: the speaker heads for the well, and a few curious neighbours gather round.
+            Move(speaker, (56, 57));
+            foreach (var n in Order.Where(n => n != speaker && !Walking(n)).OrderBy(_ => Random.Shared.Next()).Take(3))
+            {
+                Move(n, Spots[Random.Shared.Next(6)]);
+            }
+        }
+        else
+        {
+            // Now and then the pair sets off together: a walk-and-talk to another corner of the village.
+            var meet = _pos[partner];
+            if (Random.Shared.NextDouble() < .35)
+            {
+                meet = FreeSpot(partner);
+                Move(partner, meet);
+            }
+
+            var side = _pos[speaker].X <= meet.X ? -1 : 1;
+            if (meet.X + (side * 5) is < 3 or > 97)
+            {
+                side = -side;
+            }
+
+            Move(speaker, (meet.X + (side * 5), meet.Y + 1));
+            if (next != partner)
+            {
+                Move(next, (meet.X - (side * 4.5), meet.Y + 2));
+            }
+        }
+
+        _joiner = next;
+    }
+
+    // Those in the conversation face each other; bystanders close by turn to the speaker; everyone else faces where they walked.
+    private bool FacesLeft(string name)
+    {
+        var lookAt = Speaker is not { } s ? null
+            : name == s ? Partner
+            : name == Partner || name == _joiner || Distance(_pos[name], _pos[s]) < 12 ? s
+            : null;
+        return lookAt is not null && !Walking(name) ? _pos[lookAt].X < _pos[name].X - .3 : _faceLeft.Contains(name);
+    }
+
+    /// <summary>The CSS state of a villager: walking legs, talking hands, a listening nod.</summary>
+    private string Acting(string name) => string.Join(' ',
+        Walking(name) ? "walking" : string.Empty,
+        name == Speaker && Speaking ? "speaking" : string.Empty,
+        name == Speaker && _phase == Phase.Talk && !_paused ? "talking" : string.Empty,
+        name != Speaker && Speaking && (name == Partner || name == _joiner) && !Walking(name) ? "listening" : string.Empty);
+
+    private async Task PlayAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(TickMs));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+            {
+                await InvokeAsync(() =>
+                {
+                    if (Step())
+                    {
+                        StateHasChanged();
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page closed.
+        }
+    }
+
+    /// <summary>One tick: the village's comings and goings, then playback. Returns whether anything on screen changed.</summary>
+    private bool Step()
+    {
+        _now = Environment.TickCount64;
+        var walking = Order.Any(Walking);
+        var changed = walking || _anyWalking; // one more render as the last walker arrives, to stop their legs
+        _anyWalking = walking;
+
+        if (Night)
+        {
+            // Everyone heads home and goes in (Indoors), and their lamp comes on.
+            foreach (var n in Order.Where(n => !Walking(n)))
+            {
+                Move(n, Doorstep(n));
+            }
+        }
+        else if (_now >= _nextWander)
+        {
+            // Someone not in the conversation strolls somewhere else, or home; calmer while the village is talking.
+            _nextWander = _now + (_started && !CaughtUp ? Random.Shared.Next(3500, 6500) : Random.Shared.Next(1400, 3000));
+            var idle = Order.Where(n => n != Speaker && n != Partner && n != _joiner && !Walking(n)).ToList();
+            if (idle.Count > 0)
+            {
+                var who = idle[Random.Shared.Next(idle.Count)];
+                Move(who, Random.Shared.NextDouble() < .25 ? Doorstep(who) : FreeSpot(who));
+                changed = true;
+            }
+        }
+
+        // Paused: playback freezes on the current line (the hub keeps streaming the round in the background).
+        // An error also pauses, but what was said before it still plays out.
+        if (_paused && _error is null && !CaughtUp)
+        {
+            return changed;
+        }
+
+        if (_cursor >= _transcript.Count)
+        {
+            if (!_turnOver || _roundOver)
+            {
+                return changed;
+            }
+
+            // The round has played out: a breather, then the talk drifts to something new.
+            if (_caughtUpAt == 0)
+            {
+                _caughtUpAt = _now;
+                _joiner = null;
+                return true;
+            }
+
+            if (!_paused && _error is null && _now - _caughtUpAt >= BreatherMs)
+            {
+                _roundOver = true;
+                _ = NextSubjectAsync();
+                return true;
+            }
+
+            return changed;
+        }
+
+        var entry = _transcript[_cursor];
+        var said = _cursor < _transcript.Count - 1 || _turnOver;
+        if (Speaker is not { } speaker || (said && string.IsNullOrWhiteSpace(entry.Text)))
+        {
+            Advance();
+            return true;
+        }
+
+        switch (_phase)
+        {
+            case Phase.Wait:
+                Stage(speaker);
+                StartPhase(Phase.Walk);
+                return true;
+            case Phase.Walk when !Walking(speaker) && _now - _phaseAt >= 400:
+                StartPhase(Phase.Talk);
+                return true;
+            case Phase.Talk when _reveal < entry.Text.Length:
+                _reveal = Math.Min(entry.Text.Length, _reveal + CharsPerTick);
+                return true;
+            case Phase.Talk when said:
+                StartPhase(Phase.Hold);
+                return true;
+            case Phase.Hold when _now - _phaseAt >= HoldMs + (HoldMsPerChar * entry.Text.Length):
+                Advance();
+                return true;
+            default:
+                return changed;
+        }
+    }
+
+    private void Advance()
+    {
+        _cursor++;
+        _reveal = 0;
+        StartPhase(Phase.Wait);
+    }
+
+    private void StartPhase(Phase phase)
+    {
+        _phase = phase;
+        _phaseAt = _now;
+    }
+
+    /// <summary>The one button: start the day, then pause (playback freezes on the current line) or carry on.</summary>
+    private async Task ToggleAsync()
+    {
+        if (!_started)
+        {
+            _started = true;
+            await NextSubjectAsync();
+            return;
+        }
+
+        _paused = !_paused;
+        var now = Environment.TickCount64;
+        if (_paused)
+        {
+            _pausedAt = now;
+        }
+        else if (_pausedAt != 0)
+        {
+            _phaseAt += now - _pausedAt; // the time spent paused doesn't count against the hold
+            _pausedAt = 0;
+        }
+
+        if (!_paused && _error is not null)
+        {
+            _error = null;
+            _subjects = 0;
+        }
+        else if (!_paused && _subjects >= SubjectsPerDay)
+        {
+            _subjects = 0;
+        }
+    }
+
+    /// <summary>Picks a fresh subject and sets the village talking about it: a new session first, the same one after.</summary>
+    private async Task NextSubjectAsync()
+    {
+        if (++_subjects > SubjectsPerDay)
+        {
+            _paused = true;
+            _roundOver = false;
+            return;
+        }
+
+        _subject = Subjects.Where(s => s != _subject).ElementAt(Random.Shared.Next(Subjects.Length - (_subject is null ? 0 : 1)));
+        var line = $"(The talk in the lanes turns to {_subject}.)";
+        var first = _transcript.All(e => e.Agent == Subject); // no villager has spoken yet: no session to continue
+        _transcript.Add(new TranscriptEntry { Agent = Subject, Text = _subject });
+        _turnOver = false;
+        _roundOver = false;
+        _caughtUpAt = 0;
+        _error = null;
+        if (first)
+        {
+            await Client.StartCouncilAsync(line, "groupchat", 1, Order.Select(n => new AgentSetup(n, Budget, "auto")).ToArray());
+        }
+        else
+        {
+            await Client.SendUserInputAsync(line);
+        }
+    }
+
+    // Hub events only record what was said; the playback tick decides when the village shows it.
+    private void OnAgentDelta(string agent, string text) => InvokeAsync(() =>
+    {
+        if (_transcript.Count == 0 || _transcript[^1].Agent != agent)
+        {
+            _transcript.Add(new TranscriptEntry { Agent = agent });
+        }
+
+        _transcript[^1].Text += text;
+    });
+
+    private void OnAwaitUserInput() => InvokeAsync(() => _turnOver = true);
+
+    private void OnCouncilError(string message) => InvokeAsync(() =>
+    {
+        _error = message;
+        _paused = true;
+        _turnOver = true;
+        StateHasChanged();
+    });
+}
