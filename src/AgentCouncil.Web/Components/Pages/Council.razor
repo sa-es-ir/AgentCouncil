@@ -409,7 +409,16 @@
     // The table starts empty: the whole company is waiting in the roster row to be seated.
     private readonly HashSet<string> _selected = [];
     private readonly Dictionary<string, AgentSetup> _tuning =
-        Members.Keys.ToDictionary(name => name, name => new AgentSetup(name, 150, "auto"));
+        Members.Keys.ToDictionary(name => name, name => new AgentSetup(name, 150, DefaultEffort.GetValueOrDefault(name, "auto")));
+
+    // Each character thinks at its own pace until the chips say otherwise: gut reactions from Optimistic
+    // and Pessimistic, a little thought for the chair, more for the planner, most for the critic.
+    private static readonly Dictionary<string, string> DefaultEffort = new()
+    {
+        ["Moderator"] = "low",
+        ["Pragmatic"] = "medium",
+        ["Skeptic"] = "high",
+    };
     private readonly HashSet<string> _seatNames = [];
     private readonly List<TranscriptEntry> _transcript = new();
     private string _topic = string.Empty;

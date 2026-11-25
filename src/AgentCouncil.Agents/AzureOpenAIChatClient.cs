@@ -70,8 +70,19 @@ public static class AzureOpenAIChatClient
         };
 
         return next(
-            messages.Select(WithoutServerItems).Where(m => m.Contents.Count > 0).ToList(), options, cancellationToken);
+            messages.Select(WithoutServerItems).Where(m => m.Contents.Count > 0).Select(WithSpeaker).ToList(), options, cancellationToken);
     }
+
+    /// <summary>
+    /// Group chat hands the other members' turns over as user messages with an author, and the Responses API
+    /// drops author names, so each would arrive as an anonymous line. Tagged here, on the wire only, so the
+    /// agent's stored history keeps the original message.
+    /// </summary>
+    private static ChatMessage WithSpeaker(ChatMessage message) =>
+        message.Role == ChatRole.User && message.AuthorName is { } author && message.Text is { Length: > 0 } text
+            && !text.StartsWith($"[{author}]", StringComparison.Ordinal)
+            ? new ChatMessage(ChatRole.User, $"[{author}] {text}") { AuthorName = author }
+            : message;
 
     private static ChatMessage WithoutServerItems(ChatMessage message)
     {

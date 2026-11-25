@@ -44,6 +44,12 @@ public sealed class CouncilSession
 
     public string? LastSpeaker { get; set; }
 
+    /// <summary>
+    /// Group chat: the turn's last reply. The round ends right after it, so the other members never receive
+    /// it; it goes out ahead of the next user message (the speaker's own copy is deduplicated).
+    /// </summary>
+    public ChatMessage? UnheardReply { get; set; }
+
     /// <summary>The write the harness is waiting on; <see cref="ToolApprovalAgent"/> surfaces one at a time.</summary>
     public ToolApprovalRequestContent? PendingApproval { get; set; }
 
@@ -89,6 +95,14 @@ public sealed class CouncilSessionManager(CouncilAgents agents, CouncilWorkflow 
             _ => HandoffMode,
         };
         int rounds = Math.Clamp(roundsPerAgent, 1, 5);
+
+        // The village (VillageCast) has no chair: its neighbours only chat as a group, among themselves.
+        if (lineup.Any(s => VillageCast.IsVillager(s.Name))
+            && (mode != GroupChatMode || !lineup.All(s => VillageCast.IsVillager(s.Name))))
+        {
+            throw new ArgumentException("The village only chats as a group, among villagers.");
+        }
+
         AgentSetup? moderatorSetup = lineup.FirstOrDefault(IsModerator);
         bool withModerator = mode != GroupChatMode || moderatorSetup is not null;
         List<AgentSetup> personaSetups = lineup.Where(s => !IsModerator(s)).ToList();

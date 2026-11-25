@@ -202,7 +202,10 @@ public sealed class CouncilHub(CouncilSessionManager sessions, CouncilAgents age
             else if (session.IsGroupChat)
             {
                 run = session.Run!;
-                await run.TrySendMessageAsync(new List<ChatMessage> { message });
+                await run.TrySendMessageAsync(session.UnheardReply is { } unheard
+                    ? new List<ChatMessage> { unheard, message }
+                    : new List<ChatMessage> { message });
+                session.UnheardReply = null;
             }
             else
             {
@@ -360,6 +363,12 @@ public sealed class CouncilHub(CouncilSessionManager sessions, CouncilAgents age
                 case WorkflowOutputEvent output when session.IsMagentic
                     && output.As<List<ChatMessage>>() is [.., { AuthorName: CouncilAgents.ModeratorName } verdict]:
                     await EmitAsync(session, CouncilAgents.ModeratorName, verdict.Text, ct);
+                    break;
+
+                // Group chat: the round's output is the whole conversation; its last reply never reached the others.
+                case WorkflowOutputEvent output when session.IsGroupChat
+                    && output.As<List<ChatMessage>>() is [.., { AuthorName: not null } last]:
+                    session.UnheardReply = last;
                     break;
 
                 case WorkflowErrorEvent error:
